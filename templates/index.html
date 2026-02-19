@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -205,7 +205,7 @@ select { width: 100%; background: var(--surface2); border: 1px solid var(--borde
     </div>
     <div class="modal-actions">
       <button class="btn-modal-cancel" onclick="closeSeriesModal()">Cancel</button>
-      <button class="btn-modal-go" id="modalGoBtn" onclick="submitSeries()">⚡ Create 6-Episode Series</button>
+      <button class="btn-modal-go" id="modalGoBtn" onclick="submitSeries()">âš¡ Create 6-Episode Series</button>
     </div>
     <div class="modal-status" id="modalStatus"></div>
   </div>
@@ -214,9 +214,9 @@ select { width: 100%; background: var(--surface2); border: 1px solid var(--borde
 <nav>
   <div class="brand">INTELLIGENCE <span>BRIEFINGS</span></div>
   <div class="nav-status">
-    <div id="creditWarning" style="display:none;background:rgba(243,156,18,0.15);border:1px solid rgba(243,156,18,0.4);border-radius:3px;padding:3px 10px;font-family:'Rajdhani',sans-serif;font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--amber);cursor:pointer" onclick="switchTab('admin')" title="Click to view details in Admin">⚠ API Credits Low</div>
+    <div id="creditWarning" style="display:none;background:rgba(243,156,18,0.15);border:1px solid rgba(243,156,18,0.4);border-radius:3px;padding:3px 10px;font-family:'Rajdhani',sans-serif;font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--amber);cursor:pointer" onclick="switchTab('admin')" title="Click to view details in Admin">âš  API Credits Low</div>
     <div id="weekBadge" class="week-badge"><span id="weekCount">0</span> this week</div>
-    <button onclick="rebuildFeedNav()" id="rssNavBtn" style="background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted);font-family:'Rajdhani',sans-serif;font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:4px 10px;cursor:pointer;transition:all 0.2s" onmouseover="this.style.color='var(--white)';this.style.borderColor='rgba(255,255,255,0.3)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">↺ RSS</button>
+    <button onclick="rebuildFeedNav()" id="rssNavBtn" style="background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted);font-family:'Rajdhani',sans-serif;font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:4px 10px;cursor:pointer;transition:all 0.2s" onmouseover="this.style.color='var(--white)';this.style.borderColor='rgba(255,255,255,0.3)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">â†º RSS</button>
     <div class="status-dot" id="statusDot"></div>
     <div class="status-label" id="statusLabel">CONNECTING</div>
   </div>
@@ -259,9 +259,9 @@ select { width: 100%; background: var(--surface2); border: 1px solid var(--borde
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--border)">
         <div>
           <div style="font-family:'Rajdhani',sans-serif;font-size:0.75rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--amber)">You Might Be Interested</div>
-          <div style="font-size:0.73rem;color:var(--muted);margin-top:0.2rem">10 ideas based on your history + trending signals. No audio yet — commission what interests you.</div>
+          <div style="font-size:0.73rem;color:var(--muted);margin-top:0.2rem">10 ideas based on your history + trending signals. No audio yet â€” commission what interests you.</div>
         </div>
-        <button onclick="loadSuggestions(true)" style="background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted);font-family:'Rajdhani',sans-serif;font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:5px 10px;cursor:pointer;white-space:nowrap;flex-shrink:0" onmouseover="this.style.color='var(--white)'" onmouseout="this.style.color='var(--muted)'">↺ Refresh</button>
+        <button onclick="loadSuggestions(true)" style="background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted);font-family:'Rajdhani',sans-serif;font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:5px 10px;cursor:pointer;white-space:nowrap;flex-shrink:0" onmouseover="this.style.color='var(--white)'" onmouseout="this.style.color='var(--muted)'">â†º Refresh</button>
       </div>
       <div class="discover-grid" id="suggestionsGrid" style="margin-bottom:2rem">
         <div class="empty-state" style="grid-column:1/-1;font-size:0.78rem">Loading suggestions...</div>
@@ -277,7 +277,7 @@ select { width: 100%; background: var(--surface2); border: 1px solid var(--borde
     <div class="tab-panel" id="tab-series">
       <div class="series-create-bar">
         <div class="series-create-label">Create a New Series</div>
-        <div class="series-create-desc">Paste an article URL or describe a topic. The system generates a full progressive arc — each episode goes deeper. Or hit + Series on any topic card.</div>
+        <div class="series-create-desc">Paste an article URL or describe a topic. The system generates a full progressive arc â€” each episode goes deeper. Or hit + Series on any topic card.</div>
         <div class="chat-input-row">
           <input type="text" class="chat-input" id="seriesPromptInput" placeholder="Article URL or topic description..." style="border-color:rgba(52,152,219,0.3);">
           <button class="btn-send blue" onclick="openSeriesModal(null)">+ Series</button>
@@ -297,9 +297,9 @@ select { width: 100%; background: var(--surface2); border: 1px solid var(--borde
     <div class="tab-panel" id="tab-admin">
       <div class="admin-section">
         <div class="admin-title">Web Search Diagnostic</div>
-        <div class="admin-desc">Verify that Anthropic web search is active on your account. Episodes use web search for current grounding — if this fails, episodes fall back to Claude's training data only.</div>
+        <div class="admin-desc">Verify that Anthropic web search is active on your account. Episodes use web search for current grounding â€” if this fails, episodes fall back to Claude's training data only.</div>
         <div class="admin-row">
-          <button class="btn-admin" id="wsTestBtn" onclick="testWebSearch()">▶ Test Web Search</button>
+          <button class="btn-admin" id="wsTestBtn" onclick="testWebSearch()">â–¶ Test Web Search</button>
           <span class="admin-status" id="wsTestStatus"></span>
         </div>
         <div id="wsTestDetail" style="font-size:0.72rem;color:var(--muted);margin-top:0.4rem;line-height:1.5"></div>
@@ -309,7 +309,7 @@ select { width: 100%; background: var(--surface2); border: 1px solid var(--borde
         <div class="admin-title">Engagement Signals</div>
         <div class="admin-desc">Behavioral data used to calibrate recommendations. Improves over time as you listen, preview, and dismiss.</div>
         <div class="admin-row">
-          <button class="btn-admin" onclick="loadEngagementStats()">↺ Refresh</button>
+          <button class="btn-admin" onclick="loadEngagementStats()">â†º Refresh</button>
         </div>
         <div id="engagementStats" style="margin-top:0.5rem;font-size:0.75rem;color:var(--muted)">Click Refresh to load.</div>
       </div>
@@ -317,16 +317,16 @@ select { width: 100%; background: var(--surface2); border: 1px solid var(--borde
       <div class="admin-section">
         <div class="admin-title">Queue Management</div>
         <div class="admin-row">
-          <button class="btn-admin danger" onclick="clearQueue()">✕ Clear Queue</button>
-          <button class="btn-admin" onclick="refreshQueue()">↺ Refresh</button>
-          <span class="admin-status" id="queueStatus">—</span>
+          <button class="btn-admin danger" onclick="clearQueue()">âœ• Clear Queue</button>
+          <button class="btn-admin" onclick="refreshQueue()">â†º Refresh</button>
+          <span class="admin-status" id="queueStatus">â€”</span>
         </div>
         <div class="queue-list" id="queueList"></div>
       </div>
       <div class="admin-section">
         <div class="admin-title">RSS Feed</div>
         <div class="admin-row">
-          <button class="btn-admin green" onclick="rebuildFeed(event)">↺ Rebuild Feed</button>
+          <button class="btn-admin green" onclick="rebuildFeed(event)">â†º Rebuild Feed</button>
           <span class="admin-status" id="feedStatus"></span>
         </div>
         <div class="rss-url" id="rssUrlAdmin">https://intelligence-briefings-production.up.railway.app/feed.xml</div>
@@ -334,9 +334,9 @@ select { width: 100%; background: var(--surface2); border: 1px solid var(--borde
       </div>
       <div class="admin-section">
         <div class="admin-title">Nightly Trailer Queue</div>
-        <div class="admin-desc">Every night at 22:00 CT, 6 high-confidence trailers are automatically queued based on your history and trending signals. Run manually below — the system won't re-run if it already ran today (unless you force it).</div>
+        <div class="admin-desc">Every night at 22:00 CT, 6 high-confidence trailers are automatically queued based on your history and trending signals. Run manually below â€” the system won't re-run if it already ran today (unless you force it).</div>
         <div class="admin-row">
-          <button class="btn-admin amber" id="nightlyBtn" onclick="triggerNightly(false)">▶ Queue Tonight's 6 Trailers</button>
+          <button class="btn-admin amber" id="nightlyBtn" onclick="triggerNightly(false)">â–¶ Queue Tonight's 6 Trailers</button>
           <button class="btn-admin danger" onclick="triggerNightly(true)" style="font-size:0.68rem">Force Re-run</button>
           <span class="admin-status" id="nightlyStatus"></span>
         </div>
@@ -352,7 +352,7 @@ select { width: 100%; background: var(--surface2); border: 1px solid var(--borde
         <div class="admin-title">Auto-Queue from AnswerRocket</div>
         <div class="admin-desc">Pull the latest AR competitive intelligence and automatically queue one timely episode. Use this to keep your pipeline continuously fed without manual topic selection.</div>
         <div class="admin-row">
-          <button class="btn-admin amber" id="autoQueueBtn" onclick="triggerAutoQueue()">⚡ Queue AR Briefing Now</button>
+          <button class="btn-admin amber" id="autoQueueBtn" onclick="triggerAutoQueue()">âš¡ Queue AR Briefing Now</button>
           <span class="admin-status" id="autoQueueStatus"></span>
         </div>
         <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid var(--border)">
@@ -365,10 +365,10 @@ select { width: 100%; background: var(--surface2); border: 1px solid var(--borde
 
       <div class="admin-section">
         <div class="admin-title">Public Listener</div>
-        <div class="admin-desc">Shareable public episode player — no production controls. Share with colleagues or use as your thought leadership hub.</div>
+        <div class="admin-desc">Shareable public episode player â€” no production controls. Share with colleagues or use as your thought leadership hub.</div>
         <div class="admin-row">
-          <a href="/listen" target="_blank" class="btn-admin" style="text-decoration:none">↗ Open Listener</a>
-          <button class="btn-admin" onclick="navigator.clipboard.writeText(window.location.origin+'/listen').then(()=>this.textContent='✓ Copied').catch(()=>{});setTimeout(()=>this.textContent='Copy Link',2000)">Copy Link</button>
+          <a href="/listen" target="_blank" class="btn-admin" style="text-decoration:none">â†— Open Listener</a>
+          <button class="btn-admin" onclick="navigator.clipboard.writeText(window.location.origin+'/listen').then(()=>this.textContent='âœ“ Copied').catch(()=>{});setTimeout(()=>this.textContent='Copy Link',2000)">Copy Link</button>
         </div>
       </div>
     </div>
@@ -377,9 +377,9 @@ select { width: 100%; background: var(--surface2); border: 1px solid var(--borde
   <aside class="sidebar">
     <div class="side-card">
       <div class="side-title">API Status</div>
-      <div class="side-row"><span>ElevenLabs</span><span class="side-val" id="elStatus">—</span></div>
-      <div class="side-row"><span>Voices</span><span class="side-val" id="voiceCount">—</span></div>
-      <div class="side-row"><span>Full Episodes</span><span class="side-val" id="episodeCount">—</span></div>
+      <div class="side-row"><span>ElevenLabs</span><span class="side-val" id="elStatus">â€”</span></div>
+      <div class="side-row"><span>Voices</span><span class="side-val" id="voiceCount">â€”</span></div>
+      <div class="side-row"><span>Full Episodes</span><span class="side-val" id="episodeCount">â€”</span></div>
     </div>
     <div class="side-card">
       <div class="side-title">Weekly Production</div>
@@ -426,10 +426,10 @@ function switchTab(name) {
 
 async function rebuildFeedNav() {
   const btn = document.getElementById('rssNavBtn');
-  btn.textContent = '↺ ...';
+  btn.textContent = 'â†º ...';
   const data = await fetch('/api/feed/rebuild', {method:'POST'}).then(r=>r.json()).catch(()=>({success:false}));
-  btn.textContent = data.success ? '✓ RSS' : '⚠ RSS';
-  setTimeout(() => { btn.textContent = '↺ RSS'; }, 3000);
+  btn.textContent = data.success ? 'âœ“ RSS' : 'âš  RSS';
+  setTimeout(() => { btn.textContent = 'â†º RSS'; }, 3000);
 }
 
 async function checkCredits() {
@@ -439,10 +439,10 @@ async function checkCredits() {
     if(data.any_warning) {
       const el = data.health.elevenlabs;
       const an = data.health.anthropic;
-      let msg = '⚠ ';
+      let msg = 'âš  ';
       if(el.warning && el.pct_used) msg += `ElevenLabs ${el.pct_used}% used`;
       else if(el.warning) msg += 'ElevenLabs issue';
-      if(an.warning) msg += (el.warning ? ' · ' : '') + 'Anthropic quota';
+      if(an.warning) msg += (el.warning ? ' Â· ' : '') + 'Anthropic quota';
       warning.textContent = msg;
       warning.style.display = 'block';
     } else {
@@ -452,7 +452,7 @@ async function checkCredits() {
 }
 
 async function init() {
-  // loadTopics MUST complete before loadSuggestions — suggestions excludes today's topics
+  // loadTopics MUST complete before loadSuggestions â€” suggestions excludes today's topics
   // which are only written to cache once loadTopics finishes
   await Promise.all([loadVoices(), loadTopics(), loadEpisodes(), loadSeries()]);
   checkCredits();
@@ -512,7 +512,7 @@ function renderBriefings() {
       <div class="bc-tension">${t.tension}</div>
       <div class="bc-status" id="bs-${i}"></div>
       <div class="bc-audio" id="ba-${i}"></div>
-      <button class="btn-play" id="bp-${i}" onclick="generateBriefing(${i})">⚡ Generate Briefing</button>
+      <button class="btn-play" id="bp-${i}" onclick="generateBriefing(${i})">âš¡ Generate Briefing</button>
       <button class="btn-series-sm" onclick="openSeriesModal(${i})">+ Create a Series on This Topic</button>
       <div class="bc-sources" id="bsrc-${i}"></div>
     </div>`).join('');
@@ -527,18 +527,18 @@ async function generateBriefing(idx) {
       body: JSON.stringify({topic_data:topic, depth:'standard', trailer:false,
         voice_alex:document.getElementById('voice_alex').value, voice_morgan:document.getElementById('voice_morgan').value}) });
     const data = await res.json();
-    if (!data.success) { status.textContent='⚠ '+(data.error||'Error'); btn.disabled=false; btn.textContent='⚡ Retry'; card.classList.remove('playing'); return; }
+    if (!data.success) { status.textContent='âš  '+(data.error||'Error'); btn.disabled=false; btn.textContent='âš¡ Retry'; card.classList.remove('playing'); return; }
     pollJob(data.job_id, msg => status.textContent = msg,
       result => {
-        status.textContent='✓ Episode ready';
+        status.textContent='âœ“ Episode ready';
         audioDiv.innerHTML=`<audio controls src="/episodes/${result.episode.file}"></audio>`;
-        btn.textContent='↺ Regenerate'; btn.disabled=false; btn.className='btn-play ready';
+        btn.textContent='â†º Regenerate'; btn.disabled=false; btn.className='btn-play ready';
         if(result.sources&&result.sources.length) document.getElementById('bsrc-'+idx).textContent='Sources: '+result.sources.join(', ');
         weeklyCount++; updateCapDisplay(); loadEpisodes();
         const audioEl = audioDiv.querySelector('audio');
         if(audioEl) trackAudio(audioEl, topic.title, result.episode.id);
-      }, err => { status.textContent='⚠ '+err; btn.disabled=false; btn.textContent='⚡ Retry'; card.classList.remove('playing'); });
-  } catch(e) { status.textContent='⚠ Connection error'; btn.disabled=false; btn.textContent='⚡ Retry'; card.classList.remove('playing'); }
+      }, err => { status.textContent='âš  '+err; btn.disabled=false; btn.textContent='âš¡ Retry'; card.classList.remove('playing'); });
+  } catch(e) { status.textContent='âš  Connection error'; btn.disabled=false; btn.textContent='âš¡ Retry'; card.classList.remove('playing'); }
 }
 
 // ---------------------------------------------------------------------------
@@ -631,7 +631,7 @@ function renderSuggestions() {
       <div class="tc-actions" style="margin-top:0.5rem">
         <button class="btn-tc commission" onclick="commissionSuggestion(${i})" id="sgcb-${i}">Commission</button>
         <button class="btn-tc series" onclick="commissionSuggestionSeries(${i})">+ Series</button>
-        <button class="btn-tc dismiss" onclick="dismissSuggestion(${i})">✕</button>
+        <button class="btn-tc dismiss" onclick="dismissSuggestion(${i})">âœ•</button>
       </div>
       <div class="tc-status" id="sgs-${i}"></div>
     </div>`;
@@ -655,12 +655,12 @@ async function commissionSuggestion(i) {
       body:JSON.stringify({topic_data:topicData,depth:'standard',trailer:false,
         voice_alex:document.getElementById('voice_alex').value,voice_morgan:document.getElementById('voice_morgan').value})});
     const data = await res.json();
-    if(!data.success){btn.disabled=false;btn.textContent='Commission';status.textContent='⚠ '+(data.error||'Error');return;}
+    if(!data.success){btn.disabled=false;btn.textContent='Commission';status.textContent='âš  '+(data.error||'Error');return;}
     btn.textContent='Producing...';
     pollJob(data.job_id, msg=>status.textContent=msg,
-      result=>{status.textContent='✓ Ready — see Episodes';btn.textContent='✓ Done';weeklyCount++;updateCapDisplay();loadEpisodes();},
-      err=>{btn.disabled=false;btn.textContent='Commission';status.textContent='⚠ '+err;});
-  } catch(e){btn.disabled=false;btn.textContent='Commission';status.textContent='⚠ Connection error';}
+      result=>{status.textContent='âœ“ Ready â€” see Episodes';btn.textContent='âœ“ Done';weeklyCount++;updateCapDisplay();loadEpisodes();},
+      err=>{btn.disabled=false;btn.textContent='Commission';status.textContent='âš  '+err;});
+  } catch(e){btn.disabled=false;btn.textContent='Commission';status.textContent='âš  Connection error';}
 }
 
 function commissionSuggestionSeries(i) {
@@ -686,7 +686,7 @@ function renderDiscover() {
       <div class="tc-header"><div class="tc-title">${t.title}</div><span class="tc-rank">#${t.rank||''}</span></div>
       <div><div class="tc-label">Core Tension</div><div class="tc-text">${t.tension}</div></div>
       <div><div class="tc-label">Why It Matters</div><div class="tc-text">${t.why_it_matters}</div></div>
-      <button class="tc-expand" onclick="toggleDetailByTitle('${safeTitle}')">▸ What leaders get wrong + questions</button>
+      <button class="tc-expand" onclick="toggleDetailByTitle('${safeTitle}')">â–¸ What leaders get wrong + questions</button>
       <div class="tc-detail" id="td-${safeTitle}">
         ${t.common_mistake?`<div style="margin-bottom:0.5rem"><div class="tc-label">Common Mistake</div><div class="tc-text">${t.common_mistake}</div></div>`:''}
         ${sqHtml?`<div><div class="tc-label">Discussion Questions</div><ul style="padding-left:1rem;margin-top:0.3rem;font-size:0.77rem;color:var(--muted)">${sqHtml}</ul></div>`:''}
@@ -694,10 +694,10 @@ function renderDiscover() {
       <div class="tc-audio" id="ta-${safeTitle}"></div>
       <div class="tc-status" id="ts-${safeTitle}"></div>
       <div class="tc-actions">
-        <button class="btn-tc preview" id="tb-${safeTitle}" onclick="previewTopicByTitle('${safeTitle}')">▶ 90s</button>
+        <button class="btn-tc preview" id="tb-${safeTitle}" onclick="previewTopicByTitle('${safeTitle}')">â–¶ 90s</button>
         <button class="btn-tc commission" id="cb-${safeTitle}" onclick="commissionTopicByTitle('${safeTitle}')">Commission</button>
         <button class="btn-tc series" onclick="openSeriesModalByTitle('${safeTitle}')">+ Series</button>
-        <button class="btn-tc dismiss" onclick="dismissTopicByTitle('${safeTitle}')">✕</button>
+        <button class="btn-tc dismiss" onclick="dismissTopicByTitle('${safeTitle}')">âœ•</button>
       </div>
     </div>`;
   }).join('');
@@ -705,7 +705,7 @@ function renderDiscover() {
 
 function toggleDetailByTitle(safeTitle) {
   const d=document.getElementById('td-'+safeTitle), btn=d.previousElementSibling, open=d.classList.toggle('open');
-  btn.textContent=(open?'▾':'▸')+' What leaders get wrong + questions';
+  btn.textContent=(open?'â–¾':'â–¸')+' What leaders get wrong + questions';
 }
 function dismissTopicByTitle(safeTitle) {
   const title = decodeURIComponent(safeTitle);
@@ -730,14 +730,14 @@ async function previewTopicByTitle(safeTitle) {
     const res=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({topic_data:topic,trailer:true,voice_alex:document.getElementById('voice_alex').value,voice_morgan:document.getElementById('voice_morgan').value})});
     const data=await res.json();
-    if(!data.success){btn.textContent='▶ 90s';btn.disabled=false;status.textContent='⚠ '+(data.error||'Error');status.className='tc-status err';return;}
+    if(!data.success){btn.textContent='â–¶ 90s';btn.disabled=false;status.textContent='âš  '+(data.error||'Error');status.className='tc-status err';return;}
     pollJob(data.job_id, msg=>status.textContent=msg,
-      result=>{btn.textContent='▶ Replay';btn.disabled=false;status.textContent='';
+      result=>{btn.textContent='â–¶ Replay';btn.disabled=false;status.textContent='';
         document.getElementById('ta-'+safeTitle).innerHTML=`<audio controls src="/episodes/${result.episode.file}" style="width:100%;height:32px;margin-top:0.3rem"></audio>`;
         const previewAudio = document.getElementById('ta-'+safeTitle).querySelector('audio');
         if(previewAudio) trackAudio(previewAudio, decodeURIComponent(safeTitle), result.episode.id);},
-      err=>{btn.textContent='▶ 90s';btn.disabled=false;status.textContent='⚠ '+err;status.className='tc-status err';});
-  } catch(e){btn.textContent='▶ 90s';btn.disabled=false;status.textContent='⚠ Connection error';status.className='tc-status err';}
+      err=>{btn.textContent='â–¶ 90s';btn.disabled=false;status.textContent='âš  '+err;status.className='tc-status err';});
+  } catch(e){btn.textContent='â–¶ 90s';btn.disabled=false;status.textContent='âš  Connection error';status.className='tc-status err';}
 }
 
 async function commissionTopicByTitle(safeTitle) {
@@ -748,12 +748,12 @@ async function commissionTopicByTitle(safeTitle) {
     const res=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({topic_data:topic,depth:'standard',trailer:false,voice_alex:document.getElementById('voice_alex').value,voice_morgan:document.getElementById('voice_morgan').value})});
     const data=await res.json();
-    if(!data.success){btn.disabled=false;prev.disabled=false;btn.textContent='Commission';status.textContent='⚠ '+(data.error||'Error');status.className='tc-status err';return;}
+    if(!data.success){btn.disabled=false;prev.disabled=false;btn.textContent='Commission';status.textContent='âš  '+(data.error||'Error');status.className='tc-status err';return;}
     btn.textContent='Producing...';
     pollJob(data.job_id,msg=>{status.textContent=msg;status.className='tc-status';},
-      result=>{status.textContent='✓ Ready — see Episodes';status.className='tc-status ok';btn.textContent='✓ Done';btn.disabled=true;weeklyCount++;updateCapDisplay();loadEpisodes();},
-      err=>{btn.disabled=false;prev.disabled=false;btn.textContent='Commission';status.textContent='⚠ '+err;status.className='tc-status err';});
-  } catch(e){btn.disabled=false;prev.disabled=false;btn.textContent='Commission';status.textContent='⚠ Connection error';status.className='tc-status err';}
+      result=>{status.textContent='âœ“ Ready â€” see Episodes';status.className='tc-status ok';btn.textContent='âœ“ Done';btn.disabled=true;weeklyCount++;updateCapDisplay();loadEpisodes();},
+      err=>{btn.disabled=false;prev.disabled=false;btn.textContent='Commission';status.textContent='âš  '+err;status.className='tc-status err';});
+  } catch(e){btn.disabled=false;prev.disabled=false;btn.textContent='Commission';status.textContent='âš  Connection error';status.className='tc-status err';}
 }
 
 async function sendChat() {
@@ -765,7 +765,7 @@ async function sendChat() {
     const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({message,existing_topics:allTopics,voice_alex:document.getElementById('voice_alex').value,voice_morgan:document.getElementById('voice_morgan').value})});
     const data=await res.json();
-    if(!data.success){statusEl.textContent='⚠ '+(data.error||'Failed');btn.disabled=false;btn.textContent='Produce';return;}
+    if(!data.success){statusEl.textContent='âš  '+(data.error||'Failed');btn.disabled=false;btn.textContent='Produce';return;}
     btn.textContent='Producing...';
     pollJob(data.job_id,msg=>statusEl.textContent=msg,
       result=>{statusEl.textContent='';resultEl.style.display='block';
@@ -774,8 +774,8 @@ async function sendChat() {
         document.getElementById('chatResultAudio').innerHTML=`<audio controls src="/episodes/${result.episode.file}" style="width:100%;height:32px"></audio>`;
         if(result.sources&&result.sources.length) document.getElementById('chatResultSources').textContent='Sources: '+result.sources.join(', ');
         input.value='';weeklyCount++;updateCapDisplay();loadEpisodes();btn.disabled=false;btn.textContent='Produce';},
-      err=>{statusEl.textContent='⚠ '+err;btn.disabled=false;btn.textContent='Produce';});
-  } catch(e){statusEl.textContent='⚠ Connection error';btn.disabled=false;btn.textContent='Produce';}
+      err=>{statusEl.textContent='âš  '+err;btn.disabled=false;btn.textContent='Produce';});
+  } catch(e){statusEl.textContent='âš  Connection error';btn.disabled=false;btn.textContent='Produce';}
 }
 
 // SERIES MODAL
@@ -784,7 +784,7 @@ function openSeriesModal(topicIdx) {
   const seriesPrompt = document.getElementById('seriesPromptInput').value.trim();
   if (seriesModalTopic) {
     document.getElementById('modalTitle').textContent = 'Create a Series';
-    document.getElementById('modalSub').textContent = '"' + seriesModalTopic.title + '" — a ' + selectedEpCount + '-episode progressive arc going deeper on this topic.';
+    document.getElementById('modalSub').textContent = '"' + seriesModalTopic.title + '" â€” a ' + selectedEpCount + '-episode progressive arc going deeper on this topic.';
     document.getElementById('modalTopicInput').value = '';
     document.getElementById('modalTopicInput').placeholder = 'Leave blank to use this topic, or paste a URL to override';
   } else {
@@ -795,14 +795,14 @@ function openSeriesModal(topicIdx) {
   }
   document.getElementById('modalStatus').textContent = '';
   document.getElementById('modalGoBtn').disabled = false;
-  document.getElementById('modalGoBtn').textContent = '⚡ Create ' + selectedEpCount + '-Episode Series';
+  document.getElementById('modalGoBtn').textContent = 'âš¡ Create ' + selectedEpCount + '-Episode Series';
   document.getElementById('seriesModal').classList.add('open');
 }
 function closeSeriesModal() { document.getElementById('seriesModal').classList.remove('open'); }
 function selectEpCount(n) {
   selectedEpCount = n;
   document.querySelectorAll('.ep-count-btn').forEach((btn,i) => btn.classList.toggle('selected', [3,6,9,12][i] === n));
-  document.getElementById('modalGoBtn').textContent = '⚡ Create ' + n + '-Episode Series';
+  document.getElementById('modalGoBtn').textContent = 'âš¡ Create ' + n + '-Episode Series';
 }
 
 async function submitSeries() {
@@ -812,14 +812,14 @@ async function submitSeries() {
   const payload={num_episodes:selectedEpCount,voice_alex:document.getElementById('voice_alex').value,voice_morgan:document.getElementById('voice_morgan').value};
   if(customInput) payload.topic=customInput;
   else if(seriesModalTopic) payload.topic_data=seriesModalTopic;
-  else { statusEl.textContent='⚠ Please enter a topic or URL.'; btn.disabled=false; return; }
+  else { statusEl.textContent='âš  Please enter a topic or URL.'; btn.disabled=false; return; }
   try {
     const res=await fetch('/api/series',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const data=await res.json();
-    if(!data.success){statusEl.textContent='⚠ '+(data.error||'Failed');btn.disabled=false;return;}
-    statusEl.textContent='✓ Series queued! Switching to Series tab...';
+    if(!data.success){statusEl.textContent='âš  '+(data.error||'Failed');btn.disabled=false;return;}
+    statusEl.textContent='âœ“ Series queued! Switching to Series tab...';
     setTimeout(()=>{ closeSeriesModal(); switchTab('series'); loadSeries(); pollSeriesProgress(data.series_id); }, 1000);
-  } catch(e){statusEl.textContent='⚠ Connection error';btn.disabled=false;}
+  } catch(e){statusEl.textContent='âš  Connection error';btn.disabled=false;}
 }
 
 async function loadSeries() {
@@ -854,7 +854,7 @@ function renderSeriesCard(s) {
       <span class="series-badge ${badgeClass}">${badgeLabel} ${s.total?`${s.completed||0}/${s.total}`:''}</span>
     </div>
     <div class="series-progress"><div class="series-progress-fill" style="width:${pct}%"></div></div>
-    ${s.error?`<div style="font-size:0.75rem;color:var(--red-bright);margin-bottom:0.5rem">⚠ ${s.error}</div>`:''}
+    ${s.error?`<div style="font-size:0.75rem;color:var(--red-bright);margin-bottom:0.5rem">âš  ${s.error}</div>`:''}
     <div>${rows}</div>
   </div>`;
 }
@@ -890,7 +890,7 @@ async function loadEpisodes() {
               <span class="ep-date">${new Date(ep.published).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</span>
             </div>
           </div>
-          <button onclick="deleteEpisode('${ep.id}', this)" style="background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted);font-family:'Rajdhani',sans-serif;font-size:0.65rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:4px 8px;cursor:pointer;flex-shrink:0;transition:all 0.2s" onmouseover="this.style.color='var(--red-bright)';this.style.borderColor='var(--red-bright)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">✕ Delete</button>
+          <button onclick="deleteEpisode('${ep.id}', this)" style="background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted);font-family:'Rajdhani',sans-serif;font-size:0.65rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:4px 8px;cursor:pointer;flex-shrink:0;transition:all 0.2s" onmouseover="this.style.color='var(--red-bright)';this.style.borderColor='var(--red-bright)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">âœ• Delete</button>
         </div>
         <audio controls src="/episodes/${ep.file}" data-ep-id="${ep.id}" data-ep-title="${ep.title.replace(/"/g,'&quot;')}"></audio>
         ${ep.sources&&ep.sources.length?`<div class="ep-sources">Sources: ${ep.sources.join(', ')}</div>`:''}
@@ -908,13 +908,13 @@ async function testWebSearch() {
   const data = await fetch('/api/test/web-search').then(r=>r.json()).catch(()=>({success:false,error:'Connection error'}));
   btn.disabled=false;
   if(data.success) {
-    status.textContent = data.web_search_invoked ? '✓ Web search active' : '⚠ Call ok, search not invoked';
+    status.textContent = data.web_search_invoked ? 'âœ“ Web search active' : 'âš  Call ok, search not invoked';
     status.style.color = data.web_search_invoked ? 'var(--green)' : 'var(--amber)';
     detail.textContent = data.note || '';
   } else {
-    status.textContent = '✕ Failed';
+    status.textContent = 'âœ• Failed';
     status.style.color = 'var(--red-bright)';
-    detail.textContent = (data.likely_cause || '') + (data.error ? ' — ' + data.error : '');
+    detail.textContent = (data.likely_cause || '') + (data.error ? ' â€” ' + data.error : '');
   }
 }
 
@@ -924,7 +924,7 @@ async function loadEngagementStats() {
   const data = await fetch('/api/engagement').then(r=>r.json()).catch(()=>null);
   if(!data) { el.textContent = 'Could not load.'; return; }
   const strong = data.strong_interest || [], mod = data.moderate_interest || [], dismissed = data.dismissed || [];
-  if(!strong.length && !mod.length && !dismissed.length) { el.textContent = 'No engagement data yet — start listening.'; return; }
+  if(!strong.length && !mod.length && !dismissed.length) { el.textContent = 'No engagement data yet â€” start listening.'; return; }
   el.innerHTML = [
     strong.length ? `<div style="margin-bottom:0.4rem"><span style="color:var(--green);font-family:Rajdhani,sans-serif;font-size:0.65rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase">Strong (75%+ listened)</span><br>${strong.map(t=>`<div style="padding:2px 0;color:var(--white)">${t}</div>`).join('')}</div>` : '',
     mod.length ? `<div style="margin-bottom:0.4rem"><span style="color:var(--amber);font-family:Rajdhani,sans-serif;font-size:0.65rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase">Moderate (previewed)</span><br>${mod.map(t=>`<div style="padding:2px 0">${t}</div>`).join('')}</div>` : '',
@@ -943,10 +943,12 @@ async function deleteEpisode(epId, btn) {
     document.getElementById('episodeCount').textContent =
       parseInt(document.getElementById('episodeCount').textContent || '1') - 1;
   } else {
-    btn.textContent = '✕ Delete'; btn.disabled = false;
+    btn.textContent = 'âœ• Delete'; btn.disabled = false;
     alert('Delete failed: ' + (data.error || 'Unknown error'));
   }
 }
+
+async function refreshQueue() {
   try {
     const data=await fetch('/api/queue').then(r=>r.json());
     const active=data.active||[];
@@ -956,7 +958,7 @@ async function deleteEpisode(epId, btn) {
     list.innerHTML=active.map(j=>`
       <div class="queue-item">
         <span class="queue-item-status ${j.status}">${j.status}</span>
-        <span class="queue-item-progress">${j.progress||'—'}</span>
+        <span class="queue-item-progress">${j.progress||'â€”'}</span>
         <span style="font-size:0.65rem;color:var(--muted);font-family:monospace">${j.id}</span>
       </div>`).join('');
   } catch(e){document.getElementById('queueStatus').textContent='Error';}
@@ -973,7 +975,7 @@ async function rebuildFeed(e) {
   const btn=e.target, statusEl=document.getElementById('feedStatus');
   btn.disabled=true; statusEl.textContent='Rebuilding...';
   const data=await fetch('/api/feed/rebuild',{method:'POST'}).then(r=>r.json()).catch(()=>({success:false,error:'Connection error'}));
-  statusEl.textContent=data.success?`✓ ${data.episodes_in_feed} episodes in feed`:'⚠ '+data.error;
+  statusEl.textContent=data.success?`âœ“ ${data.episodes_in_feed} episodes in feed`:'âš  '+data.error;
   btn.disabled=false;
 }
 
@@ -984,9 +986,9 @@ async function triggerAutoQueue() {
     body:JSON.stringify({voice_alex:document.getElementById('voice_alex').value,voice_morgan:document.getElementById('voice_morgan').value})})
     .then(r=>r.json()).catch(()=>({success:false,error:'Connection error'}));
   if(data.success){
-    statusEl.textContent='✓ AR briefing queued (job '+data.job_id+')';
-    pollJob(data.job_id,()=>{},()=>{statusEl.textContent='✓ AR briefing ready — check Episodes';loadEpisodes();},err=>statusEl.textContent='⚠ '+err);
-  } else { statusEl.textContent='⚠ '+(data.error||'Failed'); }
+    statusEl.textContent='âœ“ AR briefing queued (job '+data.job_id+')';
+    pollJob(data.job_id,()=>{},()=>{statusEl.textContent='âœ“ AR briefing ready â€” check Episodes';loadEpisodes();},err=>statusEl.textContent='âš  '+err);
+  } else { statusEl.textContent='âš  '+(data.error||'Failed'); }
   btn.disabled=false;
 }
 
@@ -999,8 +1001,8 @@ async function triggerNightly(force=false) {
   const data = await fetch(url, {method:'POST'}).then(r=>r.json()).catch(()=>({success:false,error:'Connection error'}));
   btn.disabled=false;
   if(data.skipped) { statusEl.textContent='Already ran today. Use Force Re-run to override.'; return; }
-  if(!data.success) { statusEl.textContent='⚠ '+(data.error||'Failed'); return; }
-  statusEl.textContent=`✓ ${data.queued} trailers queued`;
+  if(!data.success) { statusEl.textContent='âš  '+(data.error||'Failed'); return; }
+  statusEl.textContent=`âœ“ ${data.queued} trailers queued`;
   if(data.job_ids && data.job_ids.length) {
     resultsEl.innerHTML = '<div style="margin-top:0.5rem;display:flex;flex-direction:column;gap:0.25rem">' +
       data.job_ids.map(j=>`<div style="font-size:0.72rem;color:var(--muted);padding:0.25rem 0.5rem;background:var(--surface2);border-radius:3px;display:flex;justify-content:space-between">
@@ -1021,7 +1023,7 @@ async function loadNightlyStatus() {
     const ranToday = run.date === today;
     const done = (run.job_ids||[]).filter(j=>j.status==='done').length;
     const total = (run.job_ids||[]).length;
-    el.textContent = ranToday ? `Last run today — ${done}/${total} trailers ready` : `Last run ${run.date}`;
+    el.textContent = ranToday ? `Last run today â€” ${done}/${total} trailers ready` : `Last run ${run.date}`;
   } catch(e) {}
 }
 
@@ -1029,3 +1031,4 @@ init();
 </script>
 </body>
 </html>
+
