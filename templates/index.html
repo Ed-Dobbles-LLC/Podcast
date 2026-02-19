@@ -894,7 +894,8 @@ async function loadEpisodes() {
         </div>
         <audio controls src="/episodes/${ep.file}" data-ep-id="${ep.id}" data-ep-title="${ep.title.replace(/"/g,'&quot;')}"></audio>
         ${ep.sources&&ep.sources.length?`<div class="ep-sources">Sources: ${ep.sources.join(', ')}</div>`:''}
-      </div>`).join('');\n    // Wire engagement tracking to all episode audio players
+      </div>`).join('');
+    // Wire engagement tracking to all episode audio players
     list.querySelectorAll('audio[data-ep-id]').forEach(a => {
       trackAudio(a, a.dataset.epTitle, a.dataset.epId);
     });
