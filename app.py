@@ -309,16 +309,27 @@ QUESTIONS TO COVER: {'; '.join(topic.get('sub_questions', []))}
 DEPTH: {depth}
 
 You are writing a two-host dialogue: Alex (analytical, direct) vs Morgan (strategic, challenges assumptions).
-Search for current data and real examples before writing. Only use claims you can verify.
+Each segment must be 3-5 substantial sentences of spoken content — no one-liners.
 
 Return ONLY a JSON array:
 [{{"host": "Alex", "text": "..."}}, ...]
 
-Segment targets: executive=6-8, standard=12-16, deep=20-28
+MINIMUM SEGMENT COUNTS (strictly enforced — count before returning):
+- executive: MINIMUM 10 segments
+- standard: MINIMUM 16 segments
+- deep: MINIMUM 24 segments
 
-Structure: cold open → grounded evidence → the tension → decision leverage → reframe close
+If you are under the minimum, you MUST add more segments before returning.
 
-After the JSON array, add on a new line:
+Structure — cover ALL sections, each gets 2-4 segments:
+1. Cold open — state the uncomfortable truth, make the listener feel the tension
+2. Ground it — concrete examples, what is actually happening right now
+3. The mechanism — WHY this dynamic exists, the structural or incentive cause
+4. What leaders get wrong — the specific mistake sophisticated people make
+5. The decision leverage — what to do differently, what question changes outcomes
+6. Close — one reframe that permanently changes how they think about this
+
+After the JSON array, on a new line:
 SOURCES: source1, source2, source3"""
 
     try:
@@ -346,15 +357,23 @@ SOURCES: source1, source2, source3"""
         print(f"[SCRIPT FAIL] {type(e).__name__}: {e}")
         traceback.print_exc()
         sq = topic.get('sub_questions', [])
+        title = topic['title']
+        tension = topic['tension']
+        matters = topic.get('why_it_matters', 'This has direct implications for how you allocate capital and talent.')
+        mistake = topic.get('common_mistake', 'They optimize for visibility over actual impact, which means the real exposure never gets addressed.')
         return [
-            {"host": "Alex", "text": f"Today we're examining a tension most executives are actively avoiding. {topic['title']}."},
-            {"host": "Morgan", "text": f"The core of it: {topic['tension']}"},
-            {"host": "Alex", "text": f"Here's why this matters right now. {topic['why_it_matters']}"},
-            {"host": "Morgan", "text": f"What sophisticated leaders consistently get wrong: {topic.get('common_mistake', 'They optimize for visibility over actual impact.')}"},
-            {"host": "Alex", "text": f"{sq[0] if sq else 'Where is the real exposure in your current approach?'}"},
-            {"host": "Morgan", "text": f"{sq[1] if len(sq) > 1 else 'What decision does this change for you in the next 90 days?'}"},
-            {"host": "Alex", "text": "The executives who navigate this well aren't the ones with the best data. They're the ones asking the better question earlier."},
-            {"host": "Morgan", "text": "That's the briefing. Sit with the tension."}
+            {"host": "Alex", "text": f"Let's start with something most executives in this space already know but haven't fully acted on. {title}. The question isn't whether this is real — it's whether you're positioned correctly when it hits your organization."},
+            {"host": "Morgan", "text": f"And the core tension is this: {tension} That's the uncomfortable part. Because it means the conventional playbook — the one that got most leaders to where they are — may actually be the wrong tool for what's coming."},
+            {"host": "Alex", "text": f"Here's why this matters at the strategic level right now. {matters} And the window to get ahead of this is shorter than most leadership teams have internalized."},
+            {"host": "Morgan", "text": "Let's ground this in what's actually happening. The organizations that are navigating this well aren't the ones with the biggest budgets or the most sophisticated tech stacks. They're the ones that identified the structural cause early and built around it rather than against it."},
+            {"host": "Alex", "text": "The structural cause is key. Most conversations about this topic focus on symptoms — the visible friction, the metrics that are off, the talent gaps. But the mechanism underneath is an incentive misalignment that organizations keep papering over with process instead of fixing at the root."},
+            {"host": "Morgan", "text": f"Which brings us to what sophisticated leaders consistently get wrong. {mistake} And the irony is that the leaders who are most experienced — who've solved hard problems before — are often the most prone to this mistake because their pattern recognition is calibrated to a different era."},
+            {"host": "Alex", "text": f"The first question worth sitting with: {sq[0] if sq else 'Where in your current approach are you optimizing for the appearance of progress rather than the underlying condition?'} That's not a rhetorical question. It has a specific answer in your organization right now."},
+            {"host": "Morgan", "text": f"And the second: {sq[1] if len(sq) > 1 else 'What would you do differently if you knew your current approach had a 24-month shelf life?'} Because the executives who are three moves ahead on this aren't smarter — they just asked that question earlier."},
+            {"host": "Alex", "text": f"If there's a third lever worth examining: {sq[2] if len(sq) > 2 else 'How are you measuring whether your governance and your actual exposure are in sync — or are you measuring the wrong thing entirely?'} The answer to that question will tell you more about your real risk posture than any framework document."},
+            {"host": "Morgan", "text": "Here's the practical implication. The next time this comes up in a leadership conversation — whether it's a board review, a budget cycle, or a talent discussion — the question isn't 'are we doing enough.' The question is 'are we working on the right thing.' Those are very different questions with very different answers."},
+            {"host": "Alex", "text": "The executives who navigate this well aren't the ones with the best data or the biggest teams. They're the ones who identified where their mental model was wrong and updated it before the market forced them to. That's the actual competitive advantage here."},
+            {"host": "Morgan", "text": f"Leave you with this reframe: {title} isn't a problem to solve. It's a condition to position around. The organizations that treat it as a solvable problem will spend the next three years in reactive mode. The ones that treat it as a structural reality will spend that same time building asymmetric advantage. That's the briefing."}
         ], []
 
 def build_trailer_script(topic):
@@ -455,12 +474,9 @@ def generate_episode_audio(client, script, ep_dir, voice_a_id, voice_b_id):
         p.write_bytes(generate_audio_bytes(client, seg["text"], vid))
         parts.append(p)
     final = ep_dir / "episode.mp3"
-    silence = b'\xff\xfb\x90\x00' + b'\x00' * 417 * 30
     with open(final, "wb") as out:
-        for i, f in enumerate(parts):
+        for f in parts:
             out.write(f.read_bytes())
-            if i < len(parts) - 1:
-                out.write(silence)
     return final
 
 # ---------------------------------------------------------------------------
