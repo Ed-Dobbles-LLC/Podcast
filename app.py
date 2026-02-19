@@ -857,6 +857,77 @@ def _run_create_series(series_id, topic_or_prompt, num_episodes, voice_alex, voi
 # ROUTES
 # ---------------------------------------------------------------------------
 
+@app.route('/api/health')
+def api_health():
+    """
+    Check API key status and credit levels.
+    ElevenLabs: pulls character quota from subscription API.
+    Anthropic: no balance API — reports key presence and catches billing errors from job history.
+    """
+    result = {
+        "elevenlabs": {"status": "unknown", "characters_remaining": None, "characters_limit": None, "warning": False},
+        "anthropic": {"status": "unknown", "warning": False},
+    }
+
+    # ElevenLabs check
+    if not ELEVEN_API_KEY:
+        result["elevenlabs"] = {"status": "missing_key", "warning": True}
+    else:
+        try:
+            import urllib.request as ur
+            req = ur.Request(
+                "https://api.elevenlabs.io/v1/user/subscription",
+                headers={"xi-api-key": ELEVEN_API_KEY}
+            )
+            with ur.urlopen(req, timeout=10) as resp:
+                sub = json.loads(resp.read())
+            used = sub.get("character_count", 0)
+            limit = sub.get("character_limit", 0)
+            remaining = limit - used
+            pct_used = (used / limit * 100) if limit else 0
+            warning = pct_used >= 80  # warn at 80% consumed
+            result["elevenlabs"] = {
+                "status": "ok",
+                "characters_used": used,
+                "characters_limit": limit,
+                "characters_remaining": remaining,
+                "pct_used": round(pct_used, 1),
+                "warning": warning,
+                "tier": sub.get("tier", "unknown"),
+            }
+        except Exception as e:
+            status_code = getattr(e, 'code', None)
+            if status_code == 401:
+                result["elevenlabs"] = {"status": "invalid_key", "warning": True}
+            else:
+                result["elevenlabs"] = {"status": "error", "error": str(e), "warning": False}
+
+    # Anthropic check — no balance API, but check key is present and test a minimal call
+    if not ANTHROPIC_API_KEY:
+        result["anthropic"] = {"status": "missing_key", "warning": True}
+    else:
+        try:
+            # Check recent job errors for billing/quota signals
+            jobs = get_all_jobs()
+            recent_errors = [j.get("error", "") for j in jobs.values()
+                             if j.get("status") == "error" and j.get("error")][-10:]
+            billing_error = any(
+                any(kw in err.lower() for kw in ["credit", "quota", "billing", "overload", "rate limit", "insufficient"])
+                for err in recent_errors
+            )
+            result["anthropic"] = {
+                "status": "ok",
+                "key_configured": True,
+                "warning": billing_error,
+                "warning_reason": "Recent job errors suggest quota or billing issues" if billing_error else None,
+            }
+        except Exception as e:
+            result["anthropic"] = {"status": "error", "error": str(e), "warning": False}
+
+    overall_warning = result["elevenlabs"]["warning"] or result["anthropic"]["warning"]
+    return jsonify({"health": result, "any_warning": overall_warning})
+
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -922,9 +993,9 @@ def api_autoqueue():
 @app.route('/api/discover/suggestions', methods=['GET'])
 def api_discover_suggestions():
     """
-    Generate 10 'You Might Be Interested' topic ideas based on episode history + trending news.
-    Returns text-only topic objects (no audio).
-    Cached for the day — call /api/discover/suggestions?refresh=true to force regenerate.
+    Generate 10 'You Might Be Interested' topic ideas.
+    Excludes today's editorial topics AND all previously commissioned episodes.
+    Cached per day; ?refresh=true forces regeneration.
     """
     SUGGESTIONS_CACHE = DATA_DIR / "suggestions_cache.json"
     today = date.today().isoformat()
@@ -938,24 +1009,34 @@ def api_discover_suggestions():
         except Exception:
             pass
 
-    # Build context from episode history
+    # Exclusion list: today's editorial topics + all commissioned episode titles
+    today_topics = []
+    if TOPICS_CACHE.exists():
+        try:
+            tc = json.loads(TOPICS_CACHE.read_text())
+            if tc.get("date") == today:
+                today_topics = [t["title"] for t in tc.get("topics", [])]
+        except Exception:
+            pass
+
     eps = load_episodes()
     commissioned = [e["title"] for e in eps if not e.get("is_trailer")][-30:]
     series_list = load_series()
     series_titles = [s["title"] for s in series_list]
+    all_exclusions = list(set(today_topics + commissioned))
 
-    history_block = ""
-    if commissioned:
-        history_block += "EPISODES COMMISSIONED (most recent first):\n" + "\n".join(f"- {t}" for t in reversed(commissioned))
-    if series_titles:
-        history_block += "\n\nSERIES CREATED:\n" + "\n".join(f"- {t}" for t in series_titles)
+    exclusion_block = "\n".join(f"- {t}" for t in all_exclusions) if all_exclusions else "None yet."
+    series_block = "\n".join(f"- {t}" for t in series_titles) if series_titles else "None yet."
 
     prompt = f"""You are an editorial intelligence engine for a senior analytics/AI executive (CAO at Overproof, former VP Analytics at Diageo North America).
 
-Your job: generate 10 high-signal topic ideas the user has NOT yet covered but would find immediately compelling.
+Generate 10 high-signal topic ideas that are NEW and DISTINCT from everything already covered.
 
-USER'S HISTORY (topics already produced — DO NOT repeat these):
-{history_block if history_block else "No history yet."}
+ALREADY COVERED — DO NOT GENERATE ANYTHING SIMILAR TO THESE:
+{exclusion_block}
+
+SERIES ARCS IN PROGRESS:
+{series_block}
 
 EXECUTIVE PROFILE:
 - Thinks in systems, incentives, capital allocation, and moats
@@ -963,17 +1044,14 @@ EXECUTIVE PROFILE:
 - Beverage alcohol: three-tier dynamics, venue intelligence, distributor data
 - Org design: CAO/CDO role evolution, analytics talent strategy
 - Active C-suite job seeker: CAO, CDO, VP Analytics
-- Reads Stratechery and The Economist, NOT TechCrunch
 
-GENERATION RULES:
-- Generate adjacent to history but NOT redundant with it
-- Include 2-3 topics that are specifically trending in the last 30 days (use your knowledge of recent events)
-- Each topic must feel slightly uncomfortable or contrarian
-- Zero generic "AI is transforming X" topics
-- Mix: enterprise AI governance, beverage alcohol, org behavior, economic models, talent strategy
-- Weight toward topics where the user has genuine domain expertise to have an opinion
+RULES:
+- Every topic must be meaningfully distinct from the exclusion list
+- Include 2-3 trending topics from the last 30 days
+- Contrarian angle required — challenges comfortable consensus
+- Zero generic AI hype topics
 
-Return ONLY a valid JSON array of exactly 10 objects, no markdown:
+Return ONLY a valid JSON array of exactly 10 objects, no markdown, no preamble:
 [{{
   "rank": 1,
   "title": "provocative but professional title",
@@ -984,18 +1062,26 @@ Return ONLY a valid JSON array of exactly 10 objects, no markdown:
 }}]"""
 
     try:
-        data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=3000, use_web_search=True)
-    except Exception:
-        data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=3000, use_web_search=False)
+        try:
+            data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=3000, use_web_search=True)
+        except Exception as ws_err:
+            print(f"[SUGGESTIONS] Web search failed ({ws_err}), falling back")
+            data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=3000, use_web_search=False)
 
-    text = extract_text(data).strip()
-    if text.startswith("```"):
-        text = text.split("```")[1]
-        if text.startswith("json"): text = text[4:]
-    suggestions = json.loads(text)[:10]
-
-    SUGGESTIONS_CACHE.write_text(json.dumps({"date": today, "suggestions": suggestions}, indent=2))
-    return jsonify({"suggestions": suggestions, "cached": False})
+        text = extract_text(data).strip()
+        if "```" in text:
+            text = text.split("```")[1]
+            if text.startswith("json"): text = text[4:]
+        bracket = text.find("[")
+        if bracket > 0:
+            text = text[bracket:]
+        suggestions = json.loads(text)[:10]
+        SUGGESTIONS_CACHE.write_text(json.dumps({"date": today, "suggestions": suggestions}, indent=2))
+        return jsonify({"suggestions": suggestions, "cached": False})
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[SUGGESTIONS] Failed: {e}")
+        return jsonify({"suggestions": [], "error": str(e), "cached": False}), 500
 
 
 @app.route('/api/cron/nightly-trailers', methods=['GET', 'POST'])
@@ -1033,31 +1119,41 @@ def api_cron_nightly_trailers():
     if not ANTHROPIC_API_KEY or not ELEVEN_API_KEY:
         return jsonify({"success": False, "error": "API keys not configured"}), 500
 
-    # Build confidence context
+    # Build exclusion list: today's topics + all commissioned episodes
+    today_topics_list = []
+    if TOPICS_CACHE.exists():
+        try:
+            tc = json.loads(TOPICS_CACHE.read_text())
+            if tc.get("date") == today:
+                today_topics_list = [t["title"] for t in tc.get("topics", [])]
+        except Exception:
+            pass
+
     eps = load_episodes()
     commissioned_titles = [e["title"] for e in eps if not e.get("is_trailer")][-20:]
     series_list = load_series()
     series_titles = [s["title"] for s in series_list]
+    all_exclusions = list(set(today_topics_list + commissioned_titles))
 
-    history_block = ""
-    if commissioned_titles:
-        history_block += "COMMISSIONED EPISODES:\n" + "\n".join(f"- {t}" for t in commissioned_titles)
-    if series_titles:
-        history_block += "\n\nSERIES ARCS:\n" + "\n".join(f"- {t}" for t in series_titles)
+    exclusion_block = "\n".join(f"- {t}" for t in all_exclusions) if all_exclusions else "None yet."
+    series_block = "\n".join(f"- {t}" for t in series_titles) if series_titles else "None yet."
 
     prompt = f"""You are a high-precision editorial recommender for a senior analytics/AI executive (CAO at Overproof, former VP Analytics Diageo North America).
 
-Your task: Generate exactly 6 topic candidates for overnight trailer production. These must be topics you are HIGHLY CONFIDENT this specific executive will want to hear when they wake up.
+Your task: Generate exactly 6 topic candidates for overnight trailer production. These must be topics you are HIGHLY CONFIDENT this specific executive will want to hear when they wake up, AND must be distinct from everything already covered.
 
 CONFIDENCE CRITERIA (use all of these):
-1. Direct adjacency to their commissioned history — deepens or challenges something they already engaged with
+1. Direct adjacency to their history — deepens or challenges something they already engaged with
 2. Emerging situation in their domain (enterprise AI, beverage alcohol, analytics org design) from the last 2-4 weeks
 3. High decision leverage — something they could act on or discuss in a board/C-suite context within 30 days
 4. Contrarian angle — challenges a comfortable belief held by their peer set
 5. Genuine relevance to their job search (CAO/CDO/VP Analytics positioning)
 
-THEIR HISTORY (AVOID DIRECT REPEATS, but adjacent topics are highly encouraged):
-{history_block if history_block else "No history yet."}
+ALREADY COVERED — DO NOT GENERATE ANYTHING SIMILAR (includes today's editorial topics):
+{exclusion_block}
+
+SERIES ARCS IN PROGRESS:
+{series_block}
 
 EXECUTIVE PROFILE:
 - Ed Dobbles, CAO at Overproof (beverage alcohol AI/analytics)

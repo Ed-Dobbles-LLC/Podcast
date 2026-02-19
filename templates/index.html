@@ -214,7 +214,9 @@ select { width: 100%; background: var(--surface2); border: 1px solid var(--borde
 <nav>
   <div class="brand">INTELLIGENCE <span>BRIEFINGS</span></div>
   <div class="nav-status">
+    <div id="creditWarning" style="display:none;background:rgba(243,156,18,0.15);border:1px solid rgba(243,156,18,0.4);border-radius:3px;padding:3px 10px;font-family:'Rajdhani',sans-serif;font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--amber);cursor:pointer" onclick="switchTab('admin')" title="Click to view details in Admin">⚠ API Credits Low</div>
     <div id="weekBadge" class="week-badge"><span id="weekCount">0</span> this week</div>
+    <button onclick="rebuildFeedNav()" id="rssNavBtn" style="background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted);font-family:'Rajdhani',sans-serif;font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:4px 10px;cursor:pointer;transition:all 0.2s" onmouseover="this.style.color='var(--white)';this.style.borderColor='rgba(255,255,255,0.3)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">↺ RSS</button>
     <div class="status-dot" id="statusDot"></div>
     <div class="status-label" id="statusLabel">CONNECTING</div>
   </div>
@@ -400,11 +402,40 @@ function switchTab(name) {
   if (name === 'admin') { refreshQueue(); loadNightlyStatus(); }
   if (name === 'series') loadSeries();
   if (name === 'episodes') loadEpisodes();
-  if (name === 'discover') { if(!allSuggestions.length) loadSuggestions(); }
+  if (name === 'discover') { renderDiscover(); renderSuggestions(); }
+}
+
+async function rebuildFeedNav() {
+  const btn = document.getElementById('rssNavBtn');
+  btn.textContent = '↺ ...';
+  const data = await fetch('/api/feed/rebuild', {method:'POST'}).then(r=>r.json()).catch(()=>({success:false}));
+  btn.textContent = data.success ? '✓ RSS' : '⚠ RSS';
+  setTimeout(() => { btn.textContent = '↺ RSS'; }, 3000);
+}
+
+async function checkCredits() {
+  try {
+    const data = await fetch('/api/health').then(r=>r.json());
+    const warning = document.getElementById('creditWarning');
+    if(data.any_warning) {
+      const el = data.health.elevenlabs;
+      const an = data.health.anthropic;
+      let msg = '⚠ ';
+      if(el.warning && el.pct_used) msg += `ElevenLabs ${el.pct_used}% used`;
+      else if(el.warning) msg += 'ElevenLabs issue';
+      if(an.warning) msg += (el.warning ? ' · ' : '') + 'Anthropic quota';
+      warning.textContent = msg;
+      warning.style.display = 'block';
+    } else {
+      warning.style.display = 'none';
+    }
+  } catch(e) {}
 }
 
 async function init() {
   await Promise.all([loadVoices(), loadTopics(), loadEpisodes(), loadSeries()]);
+  checkCredits();
+  loadSuggestions();  // pre-load suggestions in background on startup
 }
 
 async function loadVoices() {
