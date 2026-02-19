@@ -433,9 +433,11 @@ async function checkCredits() {
 }
 
 async function init() {
+  // loadTopics MUST complete before loadSuggestions — suggestions excludes today's topics
+  // which are only written to cache once loadTopics finishes
   await Promise.all([loadVoices(), loadTopics(), loadEpisodes(), loadSeries()]);
   checkCredits();
-  loadSuggestions();  // pre-load suggestions in background on startup
+  loadSuggestions();  // fires after topics cache is written, so dedup works correctly
 }
 
 async function loadVoices() {

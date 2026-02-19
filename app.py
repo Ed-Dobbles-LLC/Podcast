@@ -1005,7 +1005,14 @@ def api_discover_suggestions():
         try:
             cached = json.loads(SUGGESTIONS_CACHE.read_text())
             if cached.get("date") == today:
-                return jsonify({"suggestions": cached["suggestions"], "cached": True})
+                # Validate: suggestions cache must have been built AFTER today's topics cache
+                # to ensure today's topics were properly excluded
+                topics_mtime = TOPICS_CACHE.stat().st_mtime if TOPICS_CACHE.exists() else 0
+                suggestions_mtime = SUGGESTIONS_CACHE.stat().st_mtime
+                if suggestions_mtime >= topics_mtime:
+                    return jsonify({"suggestions": cached["suggestions"], "cached": True})
+                else:
+                    print("[SUGGESTIONS] Cache predates today's topics — regenerating to ensure dedup")
         except Exception:
             pass
 
