@@ -11,12 +11,10 @@
   --bg: #0d1117; --surface: #161b22; --surface2: #1c2333;
   --border: rgba(255,255,255,0.08); --red: #c0392b; --red-bright: #e74c3c;
   --red-hover: #a93226; --white: #e8eaf0; --muted: #8b949e;
-  --green: #2ecc71; --amber: #f39c12;
+  --green: #2ecc71; --amber: #f39c12; --blue: #3498db;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: var(--bg); color: var(--white); font-family: 'Inter', sans-serif; min-height: 100vh; }
-
-/* NAV */
 nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 56px; }
 .brand { font-family: 'Rajdhani', sans-serif; font-size: 1.2rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; }
 .brand span { color: var(--red-bright); }
@@ -26,22 +24,14 @@ nav { background: var(--surface); border-bottom: 1px solid var(--border); paddin
 .status-label { font-family: 'Rajdhani', sans-serif; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .week-badge { font-family: 'Rajdhani', sans-serif; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; padding: 3px 8px; }
 .week-badge span { color: var(--amber); font-weight: 700; }
-
-/* LAYOUT */
 .layout { display: grid; grid-template-columns: 1fr 280px; gap: 1.5rem; max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
 @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .sidebar { display: none; } }
-
-/* TABS */
-.tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; gap: 0; }
+.tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; gap: 0; flex-wrap: wrap; }
 .tab { font-family: 'Rajdhani', sans-serif; font-size: 0.85rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent; color: var(--muted); background: none; border-top: none; border-left: none; border-right: none; transition: all 0.2s; }
 .tab:hover { color: var(--white); }
 .tab.active { color: var(--white); border-bottom-color: var(--red-bright); }
-
-/* PANEL */
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
-
-/* BRIEFING CARDS (Today's) */
 .briefings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 @media (max-width: 700px) { .briefings-grid { grid-template-columns: 1fr; } }
 .briefing-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1.1rem; display: flex; flex-direction: column; gap: 0.6rem; transition: border-color 0.2s; }
@@ -53,15 +43,14 @@ nav { background: var(--surface); border-bottom: 1px solid var(--border); paddin
 .bc-tension { font-size: 0.78rem; color: var(--muted); line-height: 1.5; }
 .bc-audio { margin-top: auto; }
 .bc-audio audio { width: 100%; height: 32px; }
-.bc-audio audio::-webkit-media-controls-panel { background: var(--surface2); }
 .btn-play { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; color: var(--white); font-family: 'Rajdhani', sans-serif; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 9px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
 .btn-play:hover { border-color: var(--red-bright); background: rgba(231,76,60,0.08); }
 .btn-play:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-play.ready { border-color: rgba(46,204,113,0.4); color: var(--green); }
-.bc-sources { font-size: 0.68rem; color: var(--muted); font-style: italic; margin-top: 0.2rem; }
+.bc-sources { font-size: 0.68rem; color: var(--muted); font-style: italic; }
 .bc-status { font-size: 0.72rem; color: var(--muted); text-align: center; min-height: 1rem; }
-
-/* DISCOVER */
+.btn-series-sm { width: 100%; background: transparent; border: 1px solid rgba(52,152,219,0.4); border-radius: 4px; color: var(--blue); font-family: 'Rajdhani', sans-serif; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 6px; cursor: pointer; transition: all 0.2s; }
+.btn-series-sm:hover { background: rgba(52,152,219,0.1); }
 .discover-chat { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; margin-bottom: 1.5rem; }
 .discover-chat-label { font-family: 'Rajdhani', sans-serif; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--red-bright); margin-bottom: 0.5rem; }
 .discover-chat-desc { font-size: 0.78rem; color: var(--muted); margin-bottom: 0.75rem; line-height: 1.5; }
@@ -69,9 +58,12 @@ nav { background: var(--surface); border-bottom: 1px solid var(--border); paddin
 .chat-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; color: var(--white); font-family: 'Inter', sans-serif; font-size: 0.82rem; padding: 9px 12px; outline: none; transition: border-color 0.2s; }
 .chat-input:focus { border-color: var(--red-bright); }
 .chat-input::placeholder { color: var(--muted); }
-.btn-chat-send { background: var(--red); border: none; border-radius: 4px; color: var(--white); font-family: 'Rajdhani', sans-serif; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 9px 18px; cursor: pointer; transition: background 0.2s; white-space: nowrap; }
-.btn-chat-send:hover { background: var(--red-hover); }
-.btn-chat-send:disabled { background: #4a2020; color: var(--muted); cursor: not-allowed; }
+.btn-send { border: none; border-radius: 4px; color: var(--white); font-family: 'Rajdhani', sans-serif; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 9px 18px; cursor: pointer; transition: background 0.2s; white-space: nowrap; }
+.btn-send.red { background: var(--red); }
+.btn-send.red:hover { background: var(--red-hover); }
+.btn-send.blue { background: var(--blue); }
+.btn-send.blue:hover { background: #2980b9; }
+.btn-send:disabled { opacity: 0.5; cursor: not-allowed; }
 .chat-status { font-size: 0.75rem; color: var(--muted); margin-top: 0.5rem; min-height: 1rem; font-style: italic; }
 .chat-result { margin-top: 0.75rem; background: var(--surface2); border: 1px solid rgba(231,76,60,0.3); border-radius: 4px; padding: 0.75rem; display: none; }
 .chat-result-title { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.95rem; margin-bottom: 0.3rem; }
@@ -79,11 +71,9 @@ nav { background: var(--surface); border-bottom: 1px solid var(--border); paddin
 .chat-result-audio { margin-top: 0.6rem; }
 .chat-result-audio audio { width: 100%; height: 32px; }
 .chat-result-sources { font-size: 0.68rem; color: var(--muted); font-style: italic; margin-top: 0.3rem; }
-
-/* DISCOVER CARDS */
 .discover-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 @media (max-width: 700px) { .discover-grid { grid-template-columns: 1fr; } }
-.topic-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1.1rem; display: flex; flex-direction: column; gap: 0.6rem; transition: border-color 0.2s; }
+.topic-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1.1rem; display: flex; flex-direction: column; gap: 0.6rem; }
 .topic-card:hover { border-color: rgba(255,255,255,0.12); }
 .tc-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
 .tc-title { font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 700; line-height: 1.3; flex: 1; }
@@ -94,21 +84,63 @@ nav { background: var(--surface); border-bottom: 1px solid var(--border); paddin
 .tc-expand:hover { color: var(--white); }
 .tc-detail { display: none; }
 .tc-detail.open { display: block; }
-.tc-audio { }
 .tc-audio audio { width: 100%; height: 32px; margin-top: 0.3rem; }
 .tc-status { font-size: 0.72rem; color: var(--muted); font-style: italic; min-height: 1rem; }
 .tc-status.ok { color: var(--green); font-style: normal; font-weight: 600; }
 .tc-status.err { color: var(--red-bright); font-style: normal; }
-.tc-actions { display: flex; gap: 0.4rem; margin-top: auto; padding-top: 0.5rem; border-top: 1px solid var(--border); }
-.btn-preview { flex: 1; background: transparent; border: 1px solid var(--border); border-radius: 3px; color: var(--muted); font-family: 'Rajdhani', sans-serif; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; padding: 7px; cursor: pointer; transition: all 0.2s; }
-.btn-preview:hover { border-color: var(--red-bright); color: var(--white); }
-.btn-preview:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-commission { flex: 2; background: var(--red); border: none; border-radius: 3px; color: var(--white); font-family: 'Rajdhani', sans-serif; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 7px; cursor: pointer; transition: background 0.2s; }
-.btn-commission:hover { background: var(--red-hover); }
-.btn-commission:disabled { background: #4a2020; color: var(--muted); cursor: not-allowed; }
-.btn-dismiss { flex: 0 0 auto; background: transparent; border: 1px solid var(--border); border-radius: 3px; color: var(--muted); font-family: 'Rajdhani', sans-serif; font-size: 0.72rem; padding: 7px 10px; cursor: pointer; transition: all 0.2s; }
-.btn-dismiss:hover { color: var(--white); border-color: rgba(255,255,255,0.2); }
-
+.tc-actions { display: flex; gap: 0.4rem; margin-top: auto; padding-top: 0.5rem; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.btn-tc { border-radius: 3px; font-family: 'Rajdhani', sans-serif; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 7px; cursor: pointer; transition: all 0.2s; }
+.btn-tc.preview { flex: 1; background: transparent; border: 1px solid var(--border); color: var(--muted); }
+.btn-tc.preview:hover { border-color: var(--red-bright); color: var(--white); }
+.btn-tc.commission { flex: 2; background: var(--red); border: none; color: var(--white); }
+.btn-tc.commission:hover { background: var(--red-hover); }
+.btn-tc.series { flex: 1; background: transparent; border: 1px solid rgba(52,152,219,0.5); color: var(--blue); }
+.btn-tc.series:hover { background: rgba(52,152,219,0.1); }
+.btn-tc.dismiss { flex: 0 0 auto; background: transparent; border: 1px solid var(--border); color: var(--muted); }
+.btn-tc.dismiss:hover { color: var(--white); }
+.btn-tc:disabled { opacity: 0.4; cursor: not-allowed; }
+/* MODAL */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; display: none; align-items: center; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 500px; max-width: 95vw; }
+.modal-title { font-family: 'Rajdhani', sans-serif; font-size: 1.1rem; font-weight: 700; margin-bottom: 0.25rem; }
+.modal-sub { font-size: 0.78rem; color: var(--muted); margin-bottom: 1rem; line-height: 1.5; }
+.modal-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; font-family: 'Rajdhani', sans-serif; letter-spacing: 0.08em; margin-bottom: 0.3rem; display: block; }
+.modal-input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; color: var(--white); font-size: 0.82rem; padding: 9px 12px; outline: none; margin-bottom: 0.75rem; }
+.modal-input:focus { border-color: var(--blue); }
+.ep-count-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+.ep-count-btn { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; color: var(--muted); font-family: 'Rajdhani', sans-serif; font-size: 0.8rem; font-weight: 700; padding: 8px; cursor: pointer; transition: all 0.2s; }
+.ep-count-btn.selected { border-color: var(--blue); color: var(--blue); background: rgba(52,152,219,0.1); }
+.modal-actions { display: flex; gap: 0.5rem; }
+.btn-modal-cancel { flex: 1; background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--muted); font-family: 'Rajdhani', sans-serif; font-size: 0.82rem; font-weight: 700; padding: 10px; cursor: pointer; }
+.btn-modal-go { flex: 2; background: var(--blue); border: none; border-radius: 4px; color: var(--white); font-family: 'Rajdhani', sans-serif; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 10px; cursor: pointer; }
+.btn-modal-go:hover { background: #2980b9; }
+.btn-modal-go:disabled { opacity: 0.5; cursor: not-allowed; }
+.modal-status { font-size: 0.75rem; color: var(--muted); margin-top: 0.5rem; text-align: center; font-style: italic; min-height: 1rem; }
+/* SERIES */
+.series-create-bar { background: var(--surface); border: 1px solid rgba(52,152,219,0.3); border-radius: 6px; padding: 1rem; margin-bottom: 1.5rem; }
+.series-create-label { font-family: 'Rajdhani', sans-serif; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--blue); margin-bottom: 0.4rem; }
+.series-create-desc { font-size: 0.78rem; color: var(--muted); margin-bottom: 0.6rem; line-height: 1.5; }
+.series-list { display: flex; flex-direction: column; gap: 1rem; }
+.series-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1.1rem; }
+.series-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; }
+.series-title { font-family: 'Rajdhani', sans-serif; font-size: 1rem; font-weight: 700; flex: 1; }
+.series-badge { font-family: 'Rajdhani', sans-serif; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; border-radius: 3px; padding: 3px 8px; flex-shrink: 0; }
+.series-badge.producing { background: rgba(243,156,18,0.15); border: 1px solid rgba(243,156,18,0.4); color: var(--amber); }
+.series-badge.done { background: rgba(46,204,113,0.12); border: 1px solid rgba(46,204,113,0.3); color: var(--green); }
+.series-badge.error { background: rgba(231,76,60,0.12); border: 1px solid rgba(231,76,60,0.3); color: var(--red-bright); }
+.series-badge.outlining { background: rgba(52,152,219,0.12); border: 1px solid rgba(52,152,219,0.3); color: var(--blue); }
+.series-progress { height: 4px; background: var(--surface2); border-radius: 2px; margin-bottom: 0.75rem; overflow: hidden; }
+.series-progress-fill { height: 100%; background: var(--blue); border-radius: 2px; transition: width 0.5s; }
+.series-ep-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; padding: 0.3rem 0; border-bottom: 1px solid var(--border); }
+.series-ep-row:last-child { border-bottom: none; }
+.series-ep-num { font-family: 'Rajdhani', sans-serif; font-weight: 700; color: var(--muted); width: 24px; flex-shrink: 0; }
+.series-ep-title { flex: 1; color: var(--white); }
+.series-ep-status { font-family: 'Rajdhani', sans-serif; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; flex-shrink: 0; }
+.series-ep-status.done { color: var(--green); }
+.series-ep-status.running { color: var(--amber); }
+.series-ep-status.queued { color: var(--muted); }
+.series-ep-status.error { color: var(--red-bright); }
 /* EPISODES */
 .episodes-list { display: flex; flex-direction: column; gap: 0.75rem; }
 .ep-item { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; }
@@ -119,7 +151,23 @@ nav { background: var(--surface); border-bottom: 1px solid var(--border); paddin
 .ep-sources { font-size: 0.68rem; color: var(--muted); font-style: italic; margin-top: 0.3rem; }
 .ep-item audio { width: 100%; height: 32px; margin-top: 0.5rem; }
 .empty-state { text-align: center; padding: 3rem 1rem; color: var(--muted); font-size: 0.85rem; }
-
+/* ADMIN */
+.admin-section { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
+.admin-title { font-family: 'Rajdhani', sans-serif; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.75rem; }
+.admin-desc { font-size: 0.78rem; color: var(--muted); margin-bottom: 0.6rem; line-height: 1.5; }
+.admin-row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.admin-status { font-size: 0.75rem; color: var(--muted); font-style: italic; }
+.btn-admin { background: transparent; border: 1px solid var(--border); border-radius: 3px; color: var(--muted); font-family: 'Rajdhani', sans-serif; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 7px 14px; cursor: pointer; transition: all 0.2s; }
+.btn-admin.danger:hover { color: var(--red-bright); border-color: var(--red-bright); }
+.btn-admin.green:hover { color: var(--green); border-color: var(--green); }
+.btn-admin.amber:hover { color: var(--amber); border-color: var(--amber); }
+.btn-admin:hover { color: var(--white); }
+.queue-list { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.5rem; }
+.queue-item { display: flex; gap: 0.5rem; align-items: center; font-size: 0.73rem; padding: 0.3rem 0.5rem; background: var(--surface2); border-radius: 3px; }
+.queue-item-status { font-family: 'Rajdhani', sans-serif; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; min-width: 55px; }
+.queue-item-status.running { color: var(--amber); }
+.queue-item-status.queued { color: var(--muted); }
+.queue-item-progress { flex: 1; color: var(--muted); font-size: 0.7rem; }
 /* SIDEBAR */
 .sidebar { display: flex; flex-direction: column; gap: 1rem; }
 .side-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; }
@@ -129,7 +177,6 @@ nav { background: var(--surface); border-bottom: 1px solid var(--border); paddin
 .side-val { font-family: 'Rajdhani', sans-serif; font-weight: 700; }
 .side-val.ok { color: var(--green); }
 .side-val.err { color: var(--red-bright); }
-.side-val.warn { color: var(--amber); }
 .rss-url { font-size: 0.7rem; color: var(--muted); background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; word-break: break-all; margin-bottom: 0.5rem; }
 .btn-copy { width: 100%; background: transparent; border: 1px solid var(--red-bright); border-radius: 3px; color: var(--red-bright); font-family: 'Rajdhani', sans-serif; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 7px; cursor: pointer; transition: all 0.2s; }
 .btn-copy:hover { background: var(--red-bright); color: var(--white); }
@@ -143,10 +190,31 @@ select { width: 100%; background: var(--surface2); border: 1px solid var(--borde
 </head>
 <body>
 
+<div class="modal-overlay" id="seriesModal">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle">Create a Series</div>
+    <div class="modal-sub" id="modalSub">Generate a progressive multi-episode arc that goes deeper on this topic.</div>
+    <label class="modal-label">Override with article URL or topic (optional)</label>
+    <input type="text" class="modal-input" id="modalTopicInput" placeholder="Leave blank to use selected topic, or paste URL / describe a different topic...">
+    <label class="modal-label">Number of Episodes</label>
+    <div class="ep-count-row">
+      <button class="ep-count-btn" onclick="selectEpCount(3)">3 eps<br><small>~30 min</small></button>
+      <button class="ep-count-btn selected" onclick="selectEpCount(6)">6 eps<br><small>~60 min</small></button>
+      <button class="ep-count-btn" onclick="selectEpCount(9)">9 eps<br><small>~90 min</small></button>
+      <button class="ep-count-btn" onclick="selectEpCount(12)">12 eps<br><small>~2 hrs</small></button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="closeSeriesModal()">Cancel</button>
+      <button class="btn-modal-go" id="modalGoBtn" onclick="submitSeries()">⚡ Create 6-Episode Series</button>
+    </div>
+    <div class="modal-status" id="modalStatus"></div>
+  </div>
+</div>
+
 <nav>
   <div class="brand">INTELLIGENCE <span>BRIEFINGS</span></div>
   <div class="nav-status">
-    <div id="weekBadge" class="week-badge"><span id="weekCount">0</span> / 5 this week</div>
+    <div id="weekBadge" class="week-badge"><span id="weekCount">0</span> this week</div>
     <div class="status-dot" id="statusDot"></div>
     <div class="status-label" id="statusLabel">CONNECTING</div>
   </div>
@@ -157,24 +225,24 @@ select { width: 100%; background: var(--surface2); border: 1px solid var(--borde
     <div class="tabs">
       <button class="tab active" onclick="switchTab('briefings')">Today's Briefings</button>
       <button class="tab" onclick="switchTab('discover')">Discover</button>
+      <button class="tab" onclick="switchTab('series')">Series</button>
       <button class="tab" onclick="switchTab('episodes')">Episodes</button>
+      <button class="tab" onclick="switchTab('admin')">Admin</button>
     </div>
 
-    <!-- TODAY'S BRIEFINGS -->
     <div class="tab-panel active" id="tab-briefings">
       <div class="briefings-grid" id="briefingsGrid">
         <div class="empty-state" style="grid-column:1/-1">Loading today's briefings...</div>
       </div>
     </div>
 
-    <!-- DISCOVER -->
     <div class="tab-panel" id="tab-discover">
       <div class="discover-chat">
         <div class="discover-chat-label">Commission a Briefing</div>
-        <div class="discover-chat-desc">Tell me what you want to learn about, or reference a topic above and refine it. Example: <em>"I want to understand how distributors are using AI"</em> or <em>"Take #4 but focus on three-tier data ownership"</em></div>
+        <div class="discover-chat-desc">Describe a topic or paste an article URL. Example: <em>"How distributors are using AI"</em> or paste any article link to get a briefing on it.</div>
         <div class="chat-input-row">
-          <input type="text" class="chat-input" id="chatInput" placeholder="What do you want to explore?" onkeydown="if(event.key==='Enter')sendChat()">
-          <button class="btn-chat-send" id="chatSendBtn" onclick="sendChat()">Produce →</button>
+          <input type="text" class="chat-input" id="chatInput" placeholder="Topic, question, or URL..." onkeydown="if(event.key==='Enter')sendChat()">
+          <button class="btn-send red" id="chatSendBtn" onclick="sendChat()">Produce</button>
         </div>
         <div class="chat-status" id="chatStatus"></div>
         <div class="chat-result" id="chatResult">
@@ -184,16 +252,57 @@ select { width: 100%; background: var(--surface2); border: 1px solid var(--borde
           <div class="chat-result-sources" id="chatResultSources"></div>
         </div>
       </div>
-
       <div class="discover-grid" id="discoverGrid">
         <div class="empty-state" style="grid-column:1/-1">Loading topics...</div>
       </div>
     </div>
 
-    <!-- EPISODES -->
+    <div class="tab-panel" id="tab-series">
+      <div class="series-create-bar">
+        <div class="series-create-label">Create a New Series</div>
+        <div class="series-create-desc">Paste an article URL or describe a topic. The system generates a full progressive arc — each episode goes deeper. Or hit + Series on any topic card.</div>
+        <div class="chat-input-row">
+          <input type="text" class="chat-input" id="seriesPromptInput" placeholder="Article URL or topic description..." style="border-color:rgba(52,152,219,0.3);">
+          <button class="btn-send blue" onclick="openSeriesModal(null)">+ Series</button>
+        </div>
+      </div>
+      <div class="series-list" id="seriesList">
+        <div class="empty-state">No series yet.</div>
+      </div>
+    </div>
+
     <div class="tab-panel" id="tab-episodes">
       <div class="episodes-list" id="episodesList">
         <div class="empty-state">No episodes yet.</div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-admin">
+      <div class="admin-section">
+        <div class="admin-title">Queue Management</div>
+        <div class="admin-row">
+          <button class="btn-admin danger" onclick="clearQueue()">✕ Clear Queue</button>
+          <button class="btn-admin" onclick="refreshQueue()">↺ Refresh</button>
+          <span class="admin-status" id="queueStatus">—</span>
+        </div>
+        <div class="queue-list" id="queueList"></div>
+      </div>
+      <div class="admin-section">
+        <div class="admin-title">RSS Feed</div>
+        <div class="admin-row">
+          <button class="btn-admin green" onclick="rebuildFeed(event)">↺ Rebuild Feed</button>
+          <span class="admin-status" id="feedStatus"></span>
+        </div>
+        <div class="rss-url" id="rssUrlAdmin">https://intelligence-briefings-production.up.railway.app/feed.xml</div>
+        <button class="btn-copy" onclick="copyRSS('rssUrlAdmin')">Copy Feed URL</button>
+      </div>
+      <div class="admin-section">
+        <div class="admin-title">Auto-Queue from AnswerRocket</div>
+        <div class="admin-desc">Pull the latest AR competitive intelligence and automatically queue one timely episode. Use this to keep your pipeline continuously fed without manual topic selection.</div>
+        <div class="admin-row">
+          <button class="btn-admin amber" id="autoQueueBtn" onclick="triggerAutoQueue()">⚡ Queue AR Briefing Now</button>
+          <span class="admin-status" id="autoQueueStatus"></span>
+        </div>
       </div>
     </div>
   </main>
@@ -205,13 +314,11 @@ select { width: 100%; background: var(--surface2); border: 1px solid var(--borde
       <div class="side-row"><span>Voices</span><span class="side-val" id="voiceCount">—</span></div>
       <div class="side-row"><span>Full Episodes</span><span class="side-val" id="episodeCount">—</span></div>
     </div>
-
     <div class="side-card">
       <div class="side-title">Weekly Production</div>
       <div class="cap-bar"><div class="cap-fill" id="capFill" style="width:0%"></div></div>
       <div class="cap-label" id="capLabel">Loading...</div>
     </div>
-
     <div class="side-card">
       <div class="side-title">Voices</div>
       <div class="voice-row">
@@ -223,11 +330,10 @@ select { width: 100%; background: var(--surface2); border: 1px solid var(--borde
         <select id="voice_morgan"><option>Matilda - Knowledgable, Professional</option></select>
       </div>
     </div>
-
     <div class="side-card">
       <div class="side-title">RSS Feed</div>
       <div class="rss-url" id="rssUrl">https://intelligence-briefings-production.up.railway.app/feed.xml</div>
-      <button class="btn-copy" onclick="copyRSS()">Copy Feed URL</button>
+      <button class="btn-copy" onclick="copyRSS('rssUrl')">Copy Feed URL</button>
     </div>
   </aside>
 </div>
@@ -235,97 +341,57 @@ select { width: 100%; background: var(--surface2); border: 1px solid var(--borde
 <script>
 let allTopics = [];
 let weeklyCount = 0;
-const WEEKLY_CAP = 5;
+const WEEKLY_CAP = 50;
+let seriesModalTopic = null;
+let selectedEpCount = 6;
+let seriesPollers = {};
 
 function switchTab(name) {
-  document.querySelectorAll('.tab').forEach((t,i) => {
-    t.classList.toggle('active', ['briefings','discover','episodes'][i] === name);
-  });
+  const tabs = ['briefings','discover','series','episodes','admin'];
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', tabs[i] === name));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'admin') refreshQueue();
+  if (name === 'series') loadSeries();
+  if (name === 'episodes') loadEpisodes();
 }
 
 async function init() {
-  await Promise.all([loadVoices(), loadTopics(), loadEpisodes()]);
+  await Promise.all([loadVoices(), loadTopics(), loadEpisodes(), loadSeries()]);
 }
 
 async function loadVoices() {
   try {
     const data = await fetch('/api/voices').then(r => r.json());
     if (data.error) {
-      document.getElementById('elStatus').textContent = 'Error';
-      document.getElementById('elStatus').className = 'side-val err';
-      document.getElementById('statusDot').className = 'status-dot offline';
-      document.getElementById('statusLabel').textContent = 'OFFLINE';
-      return;
+      document.getElementById('elStatus').textContent = 'Error'; document.getElementById('elStatus').className = 'side-val err';
+      document.getElementById('statusDot').className = 'status-dot offline'; document.getElementById('statusLabel').textContent = 'OFFLINE'; return;
     }
-    document.getElementById('elStatus').textContent = 'Connected';
-    document.getElementById('elStatus').className = 'side-val ok';
+    document.getElementById('elStatus').textContent = 'Connected'; document.getElementById('elStatus').className = 'side-val ok';
     document.getElementById('voiceCount').textContent = data.voices.length;
-    document.getElementById('statusDot').className = 'status-dot';
-    document.getElementById('statusLabel').textContent = 'LIVE';
-    const selA = document.getElementById('voice_alex');
-    const selB = document.getElementById('voice_morgan');
-    selA.innerHTML = data.voices.map(v => `<option>${v.name}</option>`).join('');
-    selB.innerHTML = data.voices.map(v => `<option>${v.name}</option>`).join('');
-    // Try to pre-select known voices
+    document.getElementById('statusDot').className = 'status-dot'; document.getElementById('statusLabel').textContent = 'LIVE';
+    const selA = document.getElementById('voice_alex'), selB = document.getElementById('voice_morgan');
+    selA.innerHTML = selB.innerHTML = data.voices.map(v => `<option>${v.name}</option>`).join('');
     [...selA.options].forEach(o => { if(o.text.toLowerCase().includes('chris')) selA.value = o.text; });
     [...selB.options].forEach(o => { if(o.text.toLowerCase().includes('matilda')) selB.value = o.text; });
-  } catch(e) {
-    document.getElementById('elStatus').textContent = 'Error';
-    document.getElementById('elStatus').className = 'side-val err';
-  }
+  } catch(e) { document.getElementById('elStatus').textContent = 'Error'; document.getElementById('elStatus').className = 'side-val err'; }
 }
 
 async function loadTopics() {
   try {
     const data = await fetch('/api/topics').then(r => r.json());
-    allTopics = data.topics || [];
-    weeklyCount = data.productions_this_week || 0;
-    updateCapDisplay();
-    renderBriefings();
-    renderDiscover();
-  } catch(e) {
-    document.getElementById('briefingsGrid').innerHTML = '<div class="empty-state" style="grid-column:1/-1">Could not load topics.</div>';
-  }
+    allTopics = data.topics || []; weeklyCount = data.productions_this_week || 0;
+    updateCapDisplay(); renderBriefings(); renderDiscover();
+  } catch(e) { document.getElementById('briefingsGrid').innerHTML = '<div class="empty-state" style="grid-column:1/-1">Could not load topics.</div>'; }
 }
 
 function updateCapDisplay() {
   document.getElementById('weekCount').textContent = weeklyCount;
   const pct = Math.min(100, (weeklyCount / WEEKLY_CAP) * 100);
   document.getElementById('capFill').style.width = pct + '%';
-  document.getElementById('capFill').style.background = pct >= 100 ? 'var(--amber)' : 'var(--red-bright)';
-  document.getElementById('capLabel').textContent = weeklyCount >= WEEKLY_CAP
-    ? `Cap reached (${weeklyCount}/${WEEKLY_CAP}) — new week resets Sunday`
-    : `${WEEKLY_CAP - weeklyCount} production${WEEKLY_CAP - weeklyCount !== 1 ? 's' : ''} remaining this week`;
+  document.getElementById('capLabel').textContent = `${weeklyCount} episodes produced this week`;
 }
 
-// ---- BRIEFINGS (Today's 6, play on demand) ----
-function renderBriefings() {
-  const grid = document.getElementById('briefingsGrid');
-  if (!allTopics.length) {
-    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1">No briefings today.</div>';
-    return;
-  }
-  grid.innerHTML = allTopics.map((t, i) => `
-    <div class="briefing-card" id="bc-${i}">
-      <div class="bc-header">
-        <div class="bc-title">${t.title}</div>
-        <span class="bc-rank">#${t.rank || i+1}</span>
-      </div>
-      <div class="bc-tension">${t.tension}</div>
-      <div class="bc-status" id="bs-${i}"></div>
-      <div class="bc-audio" id="ba-${i}"></div>
-      <button class="btn-play" id="bp-${i}" onclick="generateBriefing(${i})">⚡ Generate Briefing</button>
-      <div class="bc-sources" id="bsrc-${i}"></div>
-    </div>`).join('');
-}
-
-// ---- ASYNC JOB POLLER ----
-// Polls /api/job/<job_id> every 3s until done or error.
-// onProgress(msg): called with each progress update
-// onDone(result): called with job.result when done
-// onError(msg): called on error
 function pollJob(jobId, onProgress, onDone, onError) {
   const interval = setInterval(async () => {
     try {
@@ -338,262 +404,292 @@ function pollJob(jobId, onProgress, onDone, onError) {
   }, 3000);
 }
 
+function renderBriefings() {
+  const grid = document.getElementById('briefingsGrid');
+  if (!allTopics.length) { grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1">No briefings today.</div>'; return; }
+  grid.innerHTML = allTopics.map((t, i) => `
+    <div class="briefing-card" id="bc-${i}">
+      <div class="bc-header"><div class="bc-title">${t.title}</div><span class="bc-rank">#${t.rank||i+1}</span></div>
+      <div class="bc-tension">${t.tension}</div>
+      <div class="bc-status" id="bs-${i}"></div>
+      <div class="bc-audio" id="ba-${i}"></div>
+      <button class="btn-play" id="bp-${i}" onclick="generateBriefing(${i})">⚡ Generate Briefing</button>
+      <button class="btn-series-sm" onclick="openSeriesModal(${i})">+ Create a Series on This Topic</button>
+      <div class="bc-sources" id="bsrc-${i}"></div>
+    </div>`).join('');
+}
+
 async function generateBriefing(idx) {
-  const topic = allTopics[idx];
-  const btn = document.getElementById('bp-' + idx);
-  const status = document.getElementById('bs-' + idx);
-  const audioDiv = document.getElementById('ba-' + idx);
-  const card = document.getElementById('bc-' + idx);
-
-  btn.disabled = true;
-  btn.textContent = 'Generating...';
-  card.classList.add('playing');
-  status.textContent = 'Queuing...';
-
+  const topic = allTopics[idx], btn = document.getElementById('bp-'+idx), status = document.getElementById('bs-'+idx);
+  const audioDiv = document.getElementById('ba-'+idx), card = document.getElementById('bc-'+idx);
+  btn.disabled = true; btn.textContent = 'Queuing...'; card.classList.add('playing'); status.textContent = 'Queued...';
   try {
-    const res = await fetch('/api/generate', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        topic_data: topic, depth: 'standard', trailer: false,
-        voice_alex: document.getElementById('voice_alex').value,
-        voice_morgan: document.getElementById('voice_morgan').value
-      })
-    });
+    const res = await fetch('/api/generate', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({topic_data:topic, depth:'standard', trailer:false,
+        voice_alex:document.getElementById('voice_alex').value, voice_morgan:document.getElementById('voice_morgan').value}) });
     const data = await res.json();
-    if (!data.success) {
-      status.textContent = '⚠ ' + (data.error || 'Error'); btn.disabled = false; btn.textContent = '⚡ Retry'; card.classList.remove('playing'); return;
-    }
-    pollJob(data.job_id,
-      (msg) => { status.textContent = msg; },
-      (result) => {
-        status.textContent = '✓ Episode ready';
-        audioDiv.innerHTML = `<audio controls src="/episodes/${result.episode.file}"></audio>`;
-        btn.textContent = '↺ Regenerate'; btn.disabled = false; btn.className = 'btn-play ready';
-        if (result.sources && result.sources.length)
-          document.getElementById('bsrc-' + idx).textContent = 'Sources: ' + result.sources.join(', ');
+    if (!data.success) { status.textContent='⚠ '+(data.error||'Error'); btn.disabled=false; btn.textContent='⚡ Retry'; card.classList.remove('playing'); return; }
+    pollJob(data.job_id, msg => status.textContent = msg,
+      result => {
+        status.textContent='✓ Episode ready';
+        audioDiv.innerHTML=`<audio controls src="/episodes/${result.episode.file}"></audio>`;
+        btn.textContent='↺ Regenerate'; btn.disabled=false; btn.className='btn-play ready';
+        if(result.sources&&result.sources.length) document.getElementById('bsrc-'+idx).textContent='Sources: '+result.sources.join(', ');
         weeklyCount++; updateCapDisplay(); loadEpisodes();
-      },
-      (err) => {
-        status.textContent = '⚠ ' + err; btn.disabled = false; btn.textContent = '⚡ Retry'; card.classList.remove('playing');
-      }
-    );
-  } catch(e) {
-    status.textContent = '⚠ Connection error'; btn.disabled = false; btn.textContent = '⚡ Retry'; card.classList.remove('playing');
-  }
+      }, err => { status.textContent='⚠ '+err; btn.disabled=false; btn.textContent='⚡ Retry'; card.classList.remove('playing'); });
+  } catch(e) { status.textContent='⚠ Connection error'; btn.disabled=false; btn.textContent='⚡ Retry'; card.classList.remove('playing'); }
 }
 
-// ---- DISCOVER ----
-function getDismissed() {
-  try { return JSON.parse(sessionStorage.getItem('dismissed') || '[]'); } catch(e) { return []; }
-}
-function addDismissed(title) {
-  const d = getDismissed(); d.push(title); sessionStorage.setItem('dismissed', JSON.stringify(d));
-}
+function getDismissed() { try { return JSON.parse(sessionStorage.getItem('dismissed')||'[]'); } catch(e) { return []; } }
+function addDismissed(title) { const d=getDismissed(); d.push(title); sessionStorage.setItem('dismissed',JSON.stringify(d)); }
 
 function renderDiscover() {
-  const dismissed = getDismissed();
-  const visible = allTopics.filter(t => !dismissed.includes(t.title));
+  const dismissed = getDismissed(), visible = allTopics.filter(t => !dismissed.includes(t.title));
   const grid = document.getElementById('discoverGrid');
-  if (!visible.length) {
-    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1">All topics reviewed. <button onclick="sessionStorage.clear();renderDiscover();" style="background:none;border:none;color:var(--red-bright);cursor:pointer;font-family:Rajdhani,sans-serif;text-transform:uppercase;font-size:0.85rem;font-weight:700;letter-spacing:0.05em;">Reset</button></div>';
-    return;
-  }
-  grid.innerHTML = visible.map((t, i) => {
-    const sqHtml = t.sub_questions ? t.sub_questions.map(q => `<li style="margin-bottom:0.3rem">${q}</li>`).join('') : '';
-    return `
-    <div class="topic-card" id="tc-${i}">
-      <div class="tc-header">
-        <div class="tc-title">${t.title}</div>
-        <span class="tc-rank">#${t.rank || i+1}</span>
-      </div>
-      <div>
-        <div class="tc-label">Core Tension</div>
-        <div class="tc-text">${t.tension}</div>
-      </div>
-      <div>
-        <div class="tc-label">Why It Matters</div>
-        <div class="tc-text">${t.why_it_matters}</div>
-      </div>
+  if (!visible.length) { grid.innerHTML='<div class="empty-state" style="grid-column:1/-1">All reviewed. <button onclick="sessionStorage.clear();renderDiscover();" style="background:none;border:none;color:var(--red-bright);cursor:pointer;font-family:Rajdhani,sans-serif;text-transform:uppercase;font-size:0.85rem;font-weight:700;">Reset</button></div>'; return; }
+  grid.innerHTML = visible.map((t,i) => {
+    const sqHtml = t.sub_questions ? t.sub_questions.map(q=>`<li style="margin-bottom:0.3rem">${q}</li>`).join('') : '';
+    return `<div class="topic-card" id="tc-${i}">
+      <div class="tc-header"><div class="tc-title">${t.title}</div><span class="tc-rank">#${t.rank||i+1}</span></div>
+      <div><div class="tc-label">Core Tension</div><div class="tc-text">${t.tension}</div></div>
+      <div><div class="tc-label">Why It Matters</div><div class="tc-text">${t.why_it_matters}</div></div>
       <button class="tc-expand" onclick="toggleDetail(${i})">▸ What leaders get wrong + questions</button>
       <div class="tc-detail" id="td-${i}">
-        ${t.common_mistake ? `<div style="margin-bottom:0.5rem"><div class="tc-label">Common Mistake</div><div class="tc-text">${t.common_mistake}</div></div>` : ''}
-        ${sqHtml ? `<div><div class="tc-label">Discussion Questions</div><ul style="padding-left:1rem;margin-top:0.3rem;font-size:0.77rem;color:var(--muted)">${sqHtml}</ul></div>` : ''}
+        ${t.common_mistake?`<div style="margin-bottom:0.5rem"><div class="tc-label">Common Mistake</div><div class="tc-text">${t.common_mistake}</div></div>`:''}
+        ${sqHtml?`<div><div class="tc-label">Discussion Questions</div><ul style="padding-left:1rem;margin-top:0.3rem;font-size:0.77rem;color:var(--muted)">${sqHtml}</ul></div>`:''}
       </div>
       <div class="tc-audio" id="ta-${i}"></div>
       <div class="tc-status" id="ts-${i}"></div>
       <div class="tc-actions">
-        <button class="btn-preview" id="tb-${i}" onclick="previewTopic(${i})">▶ 90s Preview</button>
-        <button class="btn-commission" id="cb-${i}" onclick="commissionTopic(${i})">Commission Episode</button>
-        <button class="btn-dismiss" onclick="dismissTopic(${i})">✕</button>
+        <button class="btn-tc preview" id="tb-${i}" onclick="previewTopic(${i})">▶ 90s</button>
+        <button class="btn-tc commission" id="cb-${i}" onclick="commissionTopic(${i})">Commission</button>
+        <button class="btn-tc series" onclick="openSeriesModal(${i})">+ Series</button>
+        <button class="btn-tc dismiss" onclick="dismissTopic(${i})">✕</button>
       </div>
     </div>`;
   }).join('');
 }
 
 function toggleDetail(i) {
-  const d = document.getElementById('td-' + i);
-  const btn = d.previousElementSibling;
-  const open = d.classList.toggle('open');
-  btn.textContent = (open ? '▾' : '▸') + ' What leaders get wrong + questions';
+  const d=document.getElementById('td-'+i), btn=d.previousElementSibling, open=d.classList.toggle('open');
+  btn.textContent=(open?'▾':'▸')+' What leaders get wrong + questions';
 }
-
-function dismissTopic(idx) {
-  const topic = allTopics[idx];
-  if (topic) addDismissed(topic.title);
-  renderDiscover();
-}
+function dismissTopic(idx) { if(allTopics[idx]) addDismissed(allTopics[idx].title); renderDiscover(); }
 
 async function previewTopic(idx) {
-  const topic = allTopics[idx];
-  if (!topic) return;
-  const btn = document.getElementById('tb-' + idx);
-  const status = document.getElementById('ts-' + idx);
-  btn.disabled = true; btn.textContent = 'Generating...';
-  status.textContent = 'Queuing preview...';
+  const topic=allTopics[idx]; if(!topic) return;
+  const btn=document.getElementById('tb-'+idx), status=document.getElementById('ts-'+idx);
+  btn.disabled=true; btn.textContent='...'; status.textContent='Queuing...';
   try {
-    const res = await fetch('/api/generate', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ topic_data: topic, trailer: true,
-        voice_alex: document.getElementById('voice_alex').value,
-        voice_morgan: document.getElementById('voice_morgan').value })
-    });
-    const data = await res.json();
-    if (!data.success) {
-      btn.textContent = '▶ 90s Preview'; btn.disabled = false;
-      status.textContent = '⚠ ' + (data.error || 'Error'); status.className = 'tc-status err'; return;
-    }
-    pollJob(data.job_id,
-      (msg) => { status.textContent = msg; },
-      (result) => {
-        btn.textContent = '▶ Replay'; btn.disabled = false; status.textContent = '';
-        document.getElementById('ta-' + idx).innerHTML =
-          `<audio controls src="/episodes/${result.episode.file}" style="width:100%;height:32px;margin-top:0.3rem"></audio>`;
-      },
-      (err) => {
-        btn.textContent = '▶ 90s Preview'; btn.disabled = false;
-        status.textContent = '⚠ ' + err; status.className = 'tc-status err';
-      }
-    );
-  } catch(e) { btn.textContent = '▶ 90s Preview'; btn.disabled = false; status.textContent = '⚠ Connection error'; status.className = 'tc-status err'; }
+    const res=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({topic_data:topic,trailer:true,voice_alex:document.getElementById('voice_alex').value,voice_morgan:document.getElementById('voice_morgan').value})});
+    const data=await res.json();
+    if(!data.success){btn.textContent='▶ 90s';btn.disabled=false;status.textContent='⚠ '+(data.error||'Error');status.className='tc-status err';return;}
+    pollJob(data.job_id, msg=>status.textContent=msg,
+      result=>{btn.textContent='▶ Replay';btn.disabled=false;status.textContent='';
+        document.getElementById('ta-'+idx).innerHTML=`<audio controls src="/episodes/${result.episode.file}" style="width:100%;height:32px;margin-top:0.3rem"></audio>`;},
+      err=>{btn.textContent='▶ 90s';btn.disabled=false;status.textContent='⚠ '+err;status.className='tc-status err';});
+  } catch(e){btn.textContent='▶ 90s';btn.disabled=false;status.textContent='⚠ Connection error';status.className='tc-status err';}
 }
 
 async function commissionTopic(idx) {
-  const topic = allTopics[idx];
-  if (!topic) return;
-  const btn = document.getElementById('cb-' + idx);
-  const prevBtn = document.getElementById('tb-' + idx);
-  const status = document.getElementById('ts-' + idx);
-  btn.disabled = true; prevBtn.disabled = true;
-  btn.textContent = 'Queuing...';
-  status.textContent = 'Queued...';
+  const topic=allTopics[idx]; if(!topic) return;
+  const btn=document.getElementById('cb-'+idx),prev=document.getElementById('tb-'+idx),status=document.getElementById('ts-'+idx);
+  btn.disabled=true;prev.disabled=true;btn.textContent='Queuing...';status.textContent='Queued...';
   try {
-    const res = await fetch('/api/generate', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ topic_data: topic, depth: 'standard', trailer: false,
-        voice_alex: document.getElementById('voice_alex').value,
-        voice_morgan: document.getElementById('voice_morgan').value })
-    });
-    const data = await res.json();
-    if (!data.success) {
-      btn.disabled = false; prevBtn.disabled = false; btn.textContent = 'Commission Episode';
-      status.textContent = '⚠ ' + (data.error || 'Error'); status.className = 'tc-status err'; return;
-    }
-    btn.textContent = 'Producing...';
-    pollJob(data.job_id,
-      (msg) => { status.textContent = msg; status.className = 'tc-status'; },
-      (result) => {
-        status.textContent = '✓ Episode ready — see Episodes tab'; status.className = 'tc-status ok';
-        btn.textContent = '✓ Commissioned'; btn.disabled = true;
-        weeklyCount++; updateCapDisplay(); loadEpisodes();
-      },
-      (err) => {
-        btn.disabled = false; prevBtn.disabled = false; btn.textContent = 'Commission Episode';
-        status.textContent = '⚠ ' + err; status.className = 'tc-status err';
-      }
-    );
-  } catch(e) {
-    btn.disabled = false; prevBtn.disabled = false; btn.textContent = 'Commission Episode';
-    status.textContent = '⚠ Connection error'; status.className = 'tc-status err';
-  }
+    const res=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({topic_data:topic,depth:'standard',trailer:false,voice_alex:document.getElementById('voice_alex').value,voice_morgan:document.getElementById('voice_morgan').value})});
+    const data=await res.json();
+    if(!data.success){btn.disabled=false;prev.disabled=false;btn.textContent='Commission';status.textContent='⚠ '+(data.error||'Error');status.className='tc-status err';return;}
+    btn.textContent='Producing...';
+    pollJob(data.job_id,msg=>{status.textContent=msg;status.className='tc-status';},
+      result=>{status.textContent='✓ Ready — see Episodes';status.className='tc-status ok';btn.textContent='✓ Done';btn.disabled=true;weeklyCount++;updateCapDisplay();loadEpisodes();},
+      err=>{btn.disabled=false;prev.disabled=false;btn.textContent='Commission';status.textContent='⚠ '+err;status.className='tc-status err';});
+  } catch(e){btn.disabled=false;prev.disabled=false;btn.textContent='Commission';status.textContent='⚠ Connection error';status.className='tc-status err';}
 }
 
 async function sendChat() {
-  const input = document.getElementById('chatInput');
-  const btn = document.getElementById('chatSendBtn');
-  const statusEl = document.getElementById('chatStatus');
-  const resultEl = document.getElementById('chatResult');
-  const message = input.value.trim();
-  if (!message) return;
-
-  btn.disabled = true; btn.textContent = 'Queuing...';
-  statusEl.textContent = 'Queued...';
-  resultEl.style.display = 'none';
-
+  const input=document.getElementById('chatInput'),btn=document.getElementById('chatSendBtn');
+  const statusEl=document.getElementById('chatStatus'),resultEl=document.getElementById('chatResult');
+  const message=input.value.trim(); if(!message) return;
+  btn.disabled=true;btn.textContent='Queuing...';statusEl.textContent='Queued...';resultEl.style.display='none';
   try {
-    const res = await fetch('/api/chat', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        message, existing_topics: allTopics,
-        voice_alex: document.getElementById('voice_alex').value,
-        voice_morgan: document.getElementById('voice_morgan').value
-      })
-    });
-    const data = await res.json();
-    if (!data.success) {
-      statusEl.textContent = '⚠ ' + (data.error || 'Production failed — try again');
-      btn.disabled = false; btn.textContent = 'Produce →'; return;
-    }
-    btn.textContent = 'Producing...';
-    pollJob(data.job_id,
-      (msg) => { statusEl.textContent = msg; },
-      (result) => {
-        statusEl.textContent = '';
-        resultEl.style.display = 'block';
-        document.getElementById('chatResultTitle').textContent = result.topic.title;
-        document.getElementById('chatResultMeta').textContent = result.topic.tension;
-        document.getElementById('chatResultAudio').innerHTML =
-          `<audio controls src="/episodes/${result.episode.file}" style="width:100%;height:32px"></audio>`;
-        if (result.sources && result.sources.length)
-          document.getElementById('chatResultSources').textContent = 'Sources: ' + result.sources.join(', ');
-        input.value = '';
-        weeklyCount++; updateCapDisplay(); loadEpisodes();
-        btn.disabled = false; btn.textContent = 'Produce →';
-      },
-      (err) => {
-        statusEl.textContent = '⚠ ' + err;
-        btn.disabled = false; btn.textContent = 'Produce →';
-      }
-    );
-  } catch(e) {
-    statusEl.textContent = '⚠ Connection error';
-    btn.disabled = false; btn.textContent = 'Produce →';
-  }
+    const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({message,existing_topics:allTopics,voice_alex:document.getElementById('voice_alex').value,voice_morgan:document.getElementById('voice_morgan').value})});
+    const data=await res.json();
+    if(!data.success){statusEl.textContent='⚠ '+(data.error||'Failed');btn.disabled=false;btn.textContent='Produce';return;}
+    btn.textContent='Producing...';
+    pollJob(data.job_id,msg=>statusEl.textContent=msg,
+      result=>{statusEl.textContent='';resultEl.style.display='block';
+        document.getElementById('chatResultTitle').textContent=result.topic.title;
+        document.getElementById('chatResultMeta').textContent=result.topic.tension;
+        document.getElementById('chatResultAudio').innerHTML=`<audio controls src="/episodes/${result.episode.file}" style="width:100%;height:32px"></audio>`;
+        if(result.sources&&result.sources.length) document.getElementById('chatResultSources').textContent='Sources: '+result.sources.join(', ');
+        input.value='';weeklyCount++;updateCapDisplay();loadEpisodes();btn.disabled=false;btn.textContent='Produce';},
+      err=>{statusEl.textContent='⚠ '+err;btn.disabled=false;btn.textContent='Produce';});
+  } catch(e){statusEl.textContent='⚠ Connection error';btn.disabled=false;btn.textContent='Produce';}
 }
 
-// ---- EPISODES ----
+// SERIES MODAL
+function openSeriesModal(topicIdx) {
+  seriesModalTopic = (topicIdx !== null && topicIdx !== undefined) ? allTopics[topicIdx] : null;
+  const seriesPrompt = document.getElementById('seriesPromptInput').value.trim();
+  if (seriesModalTopic) {
+    document.getElementById('modalTitle').textContent = 'Create a Series';
+    document.getElementById('modalSub').textContent = '"' + seriesModalTopic.title + '" — a ' + selectedEpCount + '-episode progressive arc going deeper on this topic.';
+    document.getElementById('modalTopicInput').value = '';
+    document.getElementById('modalTopicInput').placeholder = 'Leave blank to use this topic, or paste a URL to override';
+  } else {
+    document.getElementById('modalTitle').textContent = 'Create a Series from Scratch';
+    document.getElementById('modalSub').textContent = 'Describe your topic or paste an article URL. The system generates a full multi-episode arc.';
+    document.getElementById('modalTopicInput').value = seriesPrompt;
+    document.getElementById('modalTopicInput').placeholder = 'Article URL or topic description (required)';
+  }
+  document.getElementById('modalStatus').textContent = '';
+  document.getElementById('modalGoBtn').disabled = false;
+  document.getElementById('modalGoBtn').textContent = '⚡ Create ' + selectedEpCount + '-Episode Series';
+  document.getElementById('seriesModal').classList.add('open');
+}
+function closeSeriesModal() { document.getElementById('seriesModal').classList.remove('open'); }
+function selectEpCount(n) {
+  selectedEpCount = n;
+  document.querySelectorAll('.ep-count-btn').forEach((btn,i) => btn.classList.toggle('selected', [3,6,9,12][i] === n));
+  document.getElementById('modalGoBtn').textContent = '⚡ Create ' + n + '-Episode Series';
+}
+
+async function submitSeries() {
+  const btn=document.getElementById('modalGoBtn'), statusEl=document.getElementById('modalStatus');
+  const customInput=document.getElementById('modalTopicInput').value.trim();
+  btn.disabled=true; statusEl.textContent='Generating series outline... (~30 sec)';
+  const payload={num_episodes:selectedEpCount,voice_alex:document.getElementById('voice_alex').value,voice_morgan:document.getElementById('voice_morgan').value};
+  if(customInput) payload.topic=customInput;
+  else if(seriesModalTopic) payload.topic_data=seriesModalTopic;
+  else { statusEl.textContent='⚠ Please enter a topic or URL.'; btn.disabled=false; return; }
+  try {
+    const res=await fetch('/api/series',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await res.json();
+    if(!data.success){statusEl.textContent='⚠ '+(data.error||'Failed');btn.disabled=false;return;}
+    statusEl.textContent='✓ Series queued! Switching to Series tab...';
+    setTimeout(()=>{ closeSeriesModal(); switchTab('series'); loadSeries(); pollSeriesProgress(data.series_id); }, 1000);
+  } catch(e){statusEl.textContent='⚠ Connection error';btn.disabled=false;}
+}
+
+async function loadSeries() {
+  try {
+    const data=await fetch('/api/series').then(r=>r.json());
+    const list=data.series||[], el=document.getElementById('seriesList');
+    if(!list.length){el.innerHTML='<div class="empty-state">No series yet. Create one above or from any topic card.</div>';return;}
+    el.innerHTML=list.slice().reverse().map(s=>renderSeriesCard(s)).join('');
+    list.filter(s=>['outlining','producing'].includes(s.status)).forEach(s=>{ if(!seriesPollers[s.id]) pollSeriesProgress(s.id); });
+  } catch(e){}
+}
+
+function renderSeriesCard(s) {
+  const pct=s.total?Math.round((s.completed||0)/s.total*100):0;
+  const badgeMap={producing:'producing',done:'done',error:'error',outlining:'outlining',queued:'producing'};
+  const labelMap={producing:'Producing',done:'Complete',error:'Error',outlining:'Building Outline',queued:'Queued'};
+  const badgeClass=badgeMap[s.status]||'producing', badgeLabel=labelMap[s.status]||s.status;
+  const rows=(s.job_statuses||[]).map((ep,i)=>`
+    <div class="series-ep-row">
+      <span class="series-ep-num">${ep.episode||i+1}</span>
+      <span class="series-ep-title">${ep.title||'Episode '+(i+1)}</span>
+      <span class="series-ep-status ${ep.status||'queued'}">${ep.status==='running'?(ep.progress||'Running'):ep.status||'queued'}</span>
+    </div>`).join('') || (s.episodes||[]).map((ep,i)=>`
+    <div class="series-ep-row">
+      <span class="series-ep-num">${i+1}</span>
+      <span class="series-ep-title">${ep.title||'Episode '+(i+1)}</span>
+      <span class="series-ep-status queued">queued</span>
+    </div>`).join('') || '<div style="font-size:0.75rem;color:var(--muted);padding:0.3rem 0">Generating outline...</div>';
+  return `<div class="series-card" id="series-card-${s.id}">
+    <div class="series-header">
+      <div class="series-title">${s.title}</div>
+      <span class="series-badge ${badgeClass}">${badgeLabel} ${s.total?`${s.completed||0}/${s.total}`:''}</span>
+    </div>
+    <div class="series-progress"><div class="series-progress-fill" style="width:${pct}%"></div></div>
+    ${s.error?`<div style="font-size:0.75rem;color:var(--red-bright);margin-bottom:0.5rem">⚠ ${s.error}</div>`:''}
+    <div>${rows}</div>
+  </div>`;
+}
+
+function pollSeriesProgress(seriesId) {
+  if(seriesPollers[seriesId]) return;
+  const interval=setInterval(async()=>{
+    try {
+      const s=await fetch('/api/series/'+seriesId).then(r=>r.json());
+      const card=document.getElementById('series-card-'+seriesId);
+      if(card) card.outerHTML=renderSeriesCard(s);
+      if(['done','error'].includes(s.status)){clearInterval(interval);delete seriesPollers[seriesId];loadEpisodes();}
+    } catch(e){clearInterval(interval);delete seriesPollers[seriesId];}
+  }, 5000);
+  seriesPollers[seriesId]=interval;
+}
+
 async function loadEpisodes() {
   try {
-    const data = await fetch('/api/episodes').then(r => r.json());
-    const full = (data.episodes || []).filter(e => !e.is_trailer).reverse();
-    document.getElementById('episodeCount').textContent = full.length;
-    const list = document.getElementById('episodesList');
-    if (!full.length) { list.innerHTML = '<div class="empty-state">No episodes yet. Play a briefing or commission from Discover.</div>'; return; }
-    list.innerHTML = full.map(ep => `
+    const data=await fetch('/api/episodes').then(r=>r.json());
+    const full=(data.episodes||[]).filter(e=>!e.is_trailer).reverse();
+    document.getElementById('episodeCount').textContent=full.length;
+    const list=document.getElementById('episodesList');
+    if(!full.length){list.innerHTML='<div class="empty-state">No episodes yet.</div>';return;}
+    list.innerHTML=full.map(ep=>`
       <div class="ep-item">
         <div class="ep-title">${ep.title}</div>
         <div class="ep-meta">
-          <span class="ep-badge">${ep.depth || 'Standard'}</span>
+          <span class="ep-badge">${ep.depth||'Standard'}</span>
+          ${ep.series_id?`<span class="ep-badge" style="border-color:rgba(52,152,219,0.3);color:#3498db">Series</span>`:''}
           <span class="ep-date">${new Date(ep.published).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</span>
         </div>
         <audio controls src="/episodes/${ep.file}"></audio>
-        ${ep.sources && ep.sources.length ? `<div class="ep-sources">Sources: ${ep.sources.join(', ')}</div>` : ''}
+        ${ep.sources&&ep.sources.length?`<div class="ep-sources">Sources: ${ep.sources.join(', ')}</div>`:''}
       </div>`).join('');
-  } catch(e) {}
+  } catch(e){}
 }
 
-function copyRSS() {
-  navigator.clipboard.writeText(document.getElementById('rssUrl').textContent);
+async function refreshQueue() {
+  try {
+    const data=await fetch('/api/queue').then(r=>r.json());
+    const active=data.active||[];
+    document.getElementById('queueStatus').textContent=`${active.length} active job${active.length!==1?'s':''}`;
+    const list=document.getElementById('queueList');
+    if(!active.length){list.innerHTML='<div style="font-size:0.75rem;color:var(--muted);padding:0.3rem 0">Queue is empty</div>';return;}
+    list.innerHTML=active.map(j=>`
+      <div class="queue-item">
+        <span class="queue-item-status ${j.status}">${j.status}</span>
+        <span class="queue-item-progress">${j.progress||'—'}</span>
+        <span style="font-size:0.65rem;color:var(--muted);font-family:monospace">${j.id}</span>
+      </div>`).join('');
+  } catch(e){document.getElementById('queueStatus').textContent='Error';}
 }
+
+async function clearQueue() {
+  if(!confirm('Clear all queued and errored jobs?')) return;
+  const data=await fetch('/api/queue/clear',{method:'POST'}).then(r=>r.json()).catch(()=>({cleared:0}));
+  document.getElementById('queueStatus').textContent=`Cleared ${data.cleared} job${data.cleared!==1?'s':''}`;
+  await refreshQueue();
+}
+
+async function rebuildFeed(e) {
+  const btn=e.target, statusEl=document.getElementById('feedStatus');
+  btn.disabled=true; statusEl.textContent='Rebuilding...';
+  const data=await fetch('/api/feed/rebuild',{method:'POST'}).then(r=>r.json()).catch(()=>({success:false,error:'Connection error'}));
+  statusEl.textContent=data.success?`✓ ${data.episodes_in_feed} episodes in feed`:'⚠ '+data.error;
+  btn.disabled=false;
+}
+
+async function triggerAutoQueue() {
+  const btn=document.getElementById('autoQueueBtn'), statusEl=document.getElementById('autoQueueStatus');
+  btn.disabled=true; statusEl.textContent='Fetching AR intelligence...';
+  const data=await fetch('/api/autoqueue',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({voice_alex:document.getElementById('voice_alex').value,voice_morgan:document.getElementById('voice_morgan').value})})
+    .then(r=>r.json()).catch(()=>({success:false,error:'Connection error'}));
+  if(data.success){
+    statusEl.textContent='✓ AR briefing queued (job '+data.job_id+')';
+    pollJob(data.job_id,()=>{},()=>{statusEl.textContent='✓ AR briefing ready — check Episodes';loadEpisodes();},err=>statusEl.textContent='⚠ '+err);
+  } else { statusEl.textContent='⚠ '+(data.error||'Failed'); }
+  btn.disabled=false;
+}
+
+function copyRSS(elId) { navigator.clipboard.writeText(document.getElementById(elId).textContent); }
 
 init();
 </script>

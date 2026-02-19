@@ -16,10 +16,11 @@ FEED_FILE = DATA_DIR / "feed.xml"
 EPISODES_JSON = DATA_DIR / "episodes.json"
 PRODUCTION_LOG = DATA_DIR / "production_log.json"
 JOBS_FILE = DATA_DIR / "jobs.json"
+SERIES_FILE = DATA_DIR / "series.json"
 
 ELEVEN_API_KEY = os.environ.get("ELEVEN_LABS_API_KEY") or os.environ.get("ELEVENLABS_API_KEY", "")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-WEEKLY_CAP = 5
+WEEKLY_CAP = 50  # raised — series will consume more
 
 BASE_URL = os.environ.get("BASE_URL", "https://intelligence-briefings-production.up.railway.app")
 
@@ -27,7 +28,7 @@ for d in [DATA_DIR, EPISODES_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------
-# JOB QUEUE — thread-safe, persisted to Railway volume
+# JOB QUEUE
 # ---------------------------------------------------------------------------
 
 _jobs_lock = threading.Lock()
@@ -41,13 +42,13 @@ def _load_jobs():
         return {}
 
 def _save_jobs(jobs):
-    if len(jobs) > 100:
+    if len(jobs) > 200:
         sorted_keys = sorted(jobs, key=lambda k: jobs[k].get("created_at", ""))
-        for k in sorted_keys[:-100]:
+        for k in sorted_keys[:-200]:
             del jobs[k]
     JOBS_FILE.write_text(json.dumps(jobs, indent=2))
 
-def create_job(job_type="generate"):
+def create_job(job_type="generate", series_id=None, series_ep=None):
     job_id = str(uuid.uuid4())[:8]
     job = {
         "id": job_id,
@@ -58,6 +59,8 @@ def create_job(job_type="generate"):
         "progress": "Queued...",
         "result": None,
         "error": None,
+        "series_id": series_id,
+        "series_ep": series_ep,
     }
     with _jobs_lock:
         jobs = _load_jobs()
@@ -76,6 +79,22 @@ def update_job(job_id, **kwargs):
 def get_job(job_id):
     with _jobs_lock:
         return _load_jobs().get(job_id)
+
+def get_all_jobs():
+    with _jobs_lock:
+        return _load_jobs()
+
+def clear_queue():
+    """Remove all queued and error jobs. Leave running and done."""
+    with _jobs_lock:
+        jobs = _load_jobs()
+        cleared = 0
+        for jid in list(jobs.keys()):
+            if jobs[jid]["status"] in ("queued", "error"):
+                del jobs[jid]
+                cleared += 1
+        _save_jobs(jobs)
+    return cleared
 
 # ---------------------------------------------------------------------------
 # PRODUCTION CAP
@@ -241,9 +260,7 @@ def generate_topics_via_claude():
         ar_data = fetch_ar_intelligence()
         prompt = EDITORIAL_PROMPT
         if ar_data:
-            parts = []
-            for k, v in ar_data.items():
-                parts.append(f"{k.upper()}:\n{v}")
+            parts = [f"{k.upper()}:\n{v}" for k, v in ar_data.items()]
             prompt += "\n\nLIVE COMPETITIVE INTELLIGENCE (AnswerRocket):\n" + "\n\n".join(parts)
         data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=2500)
         text = extract_text(data).strip()
@@ -254,6 +271,185 @@ def generate_topics_via_claude():
     except Exception as e:
         print(f"Topic gen failed: {e}")
         return FALLBACK_TOPICS
+
+# ---------------------------------------------------------------------------
+# AUTO-QUEUE FROM ANSWERROCKET
+# ---------------------------------------------------------------------------
+
+def autoqueue_ar_topic(voice_alex, voice_morgan):
+    """Pull latest AR intelligence, generate a topic, queue it for production."""
+    try:
+        ar_data = fetch_ar_intelligence()
+        if not ar_data:
+            print("[AUTOQUEUE] No AR data available")
+            return None
+
+        ar_text = "\n\n".join(f"{k.upper()}:\n{v}" for k, v in ar_data.items())
+        prompt = f"""You are an editorial producer. Based on this live competitive intelligence, 
+generate the single most actionable topic for an executive analytics podcast.
+
+{ar_text}
+
+Return a SINGLE topic as valid JSON (no markdown):
+{{
+  "rank": 1,
+  "title": "provocative but professional title",
+  "tension": "core contrarian thesis in 1-2 sentences",
+  "why_it_matters": "strategic importance in 1 sentence",
+  "common_mistake": "what sophisticated leaders get wrong",
+  "sub_questions": ["question 1", "question 2", "question 3"],
+  "trailer_hook": "3-4 sentence spoken-word hook",
+  "production_brief": "what makes this AR-specific and timely"
+}}"""
+
+        data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=1000)
+        text = extract_text(data).strip()
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"): text = text[4:]
+        topic = json.loads(text)
+        topic["title"] = "[AR] " + topic["title"]
+
+        job_id = create_job("generate")
+        threading.Thread(
+            target=_run_generate,
+            args=(job_id, topic, "standard", voice_alex, voice_morgan, False,
+                  topic.get("production_brief", "")),
+            daemon=True
+        ).start()
+        print(f"[AUTOQUEUE] Queued AR topic: {topic['title']} → job {job_id}")
+        return job_id
+    except Exception as e:
+        print(f"[AUTOQUEUE] Failed: {e}")
+        return None
+
+# ---------------------------------------------------------------------------
+# SERIES GENERATION
+# ---------------------------------------------------------------------------
+
+def load_series():
+    if not SERIES_FILE.exists(): return []
+    try: return json.loads(SERIES_FILE.read_text())
+    except: return []
+
+def save_series(series_list):
+    SERIES_FILE.write_text(json.dumps(series_list, indent=2))
+
+def generate_series_outline(topic_or_prompt, num_episodes=6):
+    """
+    Generate a coherent N-episode arc on a topic.
+    topic_or_prompt: either a topic dict or a plain string prompt/URL.
+    Returns list of episode topic dicts with series_context field.
+    """
+    if isinstance(topic_or_prompt, dict):
+        seed = f"TOPIC: {topic_or_prompt['title']}\nTENSION: {topic_or_prompt.get('tension','')}"
+    else:
+        seed = f"PROMPT/SOURCE: {topic_or_prompt}"
+
+    prompt = f"""You are an executive podcast series producer. 
+Create a {num_episodes}-episode deep-dive series arc for a senior analytics and AI executive.
+
+SEED:
+{seed}
+
+Design a progressive series where each episode builds on the previous. 
+Episode 1 = executive overview (the what and why).
+Episodes 2-{num_episodes-1} = progressively deeper angles (mechanisms, case studies, frameworks, edge cases, implications).
+Episode {num_episodes} = synthesis and forward view (what to do, what comes next).
+
+Each episode must stand alone AND reward listeners who follow the arc.
+
+Return ONLY a valid JSON array of {num_episodes} topic objects, no markdown:
+[{{
+  "episode_number": 1,
+  "title": "specific episode title",
+  "tension": "core thesis for this episode in 1-2 sentences",
+  "why_it_matters": "strategic importance in 1 sentence",
+  "common_mistake": "what leaders get wrong on this specific angle",
+  "sub_questions": ["question 1", "question 2", "question 3"],
+  "trailer_hook": "3-4 sentence spoken-word hook",
+  "series_context": "1-2 sentences: how this episode fits the arc and what came before"
+}}]"""
+
+    try:
+        data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=4000)
+        text = extract_text(data).strip()
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"): text = text[4:]
+        episodes = json.loads(text)
+        print(f"[SERIES] Generated {len(episodes)}-episode arc")
+        return episodes
+    except Exception as e:
+        print(f"[SERIES] Outline generation failed: {e}")
+        raise
+
+def _run_series(series_id, episodes, voice_alex, voice_morgan):
+    """Background worker: generate all episodes in a series sequentially."""
+    series_list = load_series()
+    series_entry = next((s for s in series_list if s["id"] == series_id), None)
+    if not series_entry:
+        return
+
+    for i, ep_topic in enumerate(episodes):
+        ep_num = i + 1
+        job_id = series_entry["job_ids"][i]
+
+        try:
+            update_job(job_id, status="running",
+                       progress=f"Episode {ep_num}/{len(episodes)}: Writing script...")
+
+            # Add series context to production brief
+            production_brief = ep_topic.get("series_context", "")
+            if ep_num > 1:
+                production_brief += f" This is episode {ep_num} of {len(episodes)} in the series — assume listeners heard previous episodes."
+
+            script, sources = generate_grounded_script(ep_topic, depth="standard",
+                                                        production_brief=production_brief)
+            log_production()
+
+            update_job(job_id, progress=f"Episode {ep_num}/{len(episodes)}: Generating audio ({len(script)} segments)...")
+            client = get_elevenlabs_client()
+            voice_a_id = resolve_voice(client, voice_alex)
+            voice_b_id = resolve_voice(client, voice_morgan)
+            if not voice_a_id or not voice_b_id:
+                update_job(job_id, status="error", error="Voice not found")
+                continue
+
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            ep_id = f"series-{series_id}-ep{ep_num}-{timestamp}"
+            ep_dir = EPISODES_DIR / ep_id
+            final_path = generate_episode_audio(client, script, ep_dir, voice_a_id, voice_b_id)
+            dest = EPISODES_DIR / f"{ep_id}.mp3"
+            shutil.copy2(final_path, dest)
+
+            entry = {
+                "id": ep_id,
+                "title": f"[S: {series_entry['title']}] Ep {ep_num}: {ep_topic['title']}",
+                "description": ep_topic.get("tension", ""),
+                "file": f"{ep_id}.mp3",
+                "file_size": dest.stat().st_size,
+                "depth": "Standard",
+                "is_trailer": False,
+                "sources": sources,
+                "published": datetime.now(timezone.utc).isoformat(),
+                "series_id": series_id,
+                "series_ep": ep_num,
+            }
+            save_episode(entry)
+            update_job(job_id, status="done", progress=f"Episode {ep_num} complete",
+                       result={"episode": entry, "sources": sources})
+
+            # Update series progress
+            series_list = load_series()
+            s = next((x for x in series_list if x["id"] == series_id), None)
+            if s:
+                s["completed"] = s.get("completed", 0) + 1
+                save_series(series_list)
+
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            update_job(job_id, status="error", error=str(e))
 
 # ---------------------------------------------------------------------------
 # CHAT
@@ -333,7 +529,6 @@ After the JSON array, on a new line:
 SOURCES: source1, source2, source3"""
 
     try:
-        # web_search disabled for reliability testing — re-enable after confirming pipeline works
         data = call_anthropic([{"role": "user", "content": prompt}],
                               max_tokens=4000, use_web_search=False)
         full_text = extract_text(data)
@@ -370,10 +565,10 @@ SOURCES: source1, source2, source3"""
             {"host": "Morgan", "text": f"Which brings us to what sophisticated leaders consistently get wrong. {mistake} And the irony is that the leaders who are most experienced — who've solved hard problems before — are often the most prone to this mistake because their pattern recognition is calibrated to a different era."},
             {"host": "Alex", "text": f"The first question worth sitting with: {sq[0] if sq else 'Where in your current approach are you optimizing for the appearance of progress rather than the underlying condition?'} That's not a rhetorical question. It has a specific answer in your organization right now."},
             {"host": "Morgan", "text": f"And the second: {sq[1] if len(sq) > 1 else 'What would you do differently if you knew your current approach had a 24-month shelf life?'} Because the executives who are three moves ahead on this aren't smarter — they just asked that question earlier."},
-            {"host": "Alex", "text": f"If there's a third lever worth examining: {sq[2] if len(sq) > 2 else 'How are you measuring whether your governance and your actual exposure are in sync — or are you measuring the wrong thing entirely?'} The answer to that question will tell you more about your real risk posture than any framework document."},
-            {"host": "Morgan", "text": "Here's the practical implication. The next time this comes up in a leadership conversation — whether it's a board review, a budget cycle, or a talent discussion — the question isn't 'are we doing enough.' The question is 'are we working on the right thing.' Those are very different questions with very different answers."},
+            {"host": "Alex", "text": f"If there's a third lever worth examining: {sq[2] if len(sq) > 2 else 'How are you measuring whether your governance and your actual exposure are in sync?'} The answer tells you more about your real risk posture than any framework document."},
+            {"host": "Morgan", "text": "Here's the practical implication. The next time this comes up — whether it's a board review, a budget cycle, or a talent discussion — the question isn't 'are we doing enough.' The question is 'are we working on the right thing.' Those are very different questions with very different answers."},
             {"host": "Alex", "text": "The executives who navigate this well aren't the ones with the best data or the biggest teams. They're the ones who identified where their mental model was wrong and updated it before the market forced them to. That's the actual competitive advantage here."},
-            {"host": "Morgan", "text": f"Leave you with this reframe: {title} isn't a problem to solve. It's a condition to position around. The organizations that treat it as a solvable problem will spend the next three years in reactive mode. The ones that treat it as a structural reality will spend that same time building asymmetric advantage. That's the briefing."}
+            {"host": "Morgan", "text": f"Leave you with this reframe: {title} isn't a problem to solve. It's a condition to position around. The organizations that treat it as solvable will spend the next three years in reactive mode. The ones that treat it as structural reality will spend that same time building asymmetric advantage. That's the briefing."}
         ], []
 
 def build_trailer_script(topic):
@@ -439,7 +634,7 @@ def build_feed():
 </rss>"""
 
     FEED_FILE.write_text(feed_xml, encoding="utf-8")
-    print(f"Feed rebuilt: {len(feed_eps)} episodes")
+    print(f"[FEED] Rebuilt: {len(feed_eps)} episodes")
 
 # ---------------------------------------------------------------------------
 # AUDIO
@@ -514,7 +709,7 @@ def _run_generate(job_id, topic_data, depth, voice_alex, voice_morgan, is_traile
             update_job(job_id, progress="Building trailer...")
             script, sources = build_trailer_script(topic_data)
         else:
-            update_job(job_id, progress="Researching and writing script — takes 2-3 minutes...")
+            update_job(job_id, progress="Writing script — 1-2 minutes...")
             script, sources = generate_grounded_script(topic_data, depth, production_brief)
             log_production()
 
@@ -524,7 +719,6 @@ def _run_generate(job_id, topic_data, depth, voice_alex, voice_morgan, is_traile
         ep_id = f"briefing-{ep_type}-{timestamp}"
         ep_dir = EPISODES_DIR / ep_id
         final_path = generate_episode_audio(client, script, ep_dir, voice_a_id, voice_b_id)
-
         dest = EPISODES_DIR / f"{ep_id}.mp3"
         shutil.copy2(final_path, dest)
 
@@ -555,7 +749,7 @@ def _run_chat(job_id, message, existing_topics, voice_alex, voice_morgan):
         topic = chat_to_topic(message, existing_topics)
         production_brief = topic.get("production_brief", "")
 
-        update_job(job_id, progress="Researching and writing script — takes 2-3 minutes...")
+        update_job(job_id, progress="Writing script — 1-2 minutes...")
         script, sources = generate_grounded_script(topic, depth="standard",
                                                     production_brief=production_brief)
 
@@ -570,7 +764,6 @@ def _run_chat(job_id, message, existing_topics, voice_alex, voice_morgan):
         ep_id = f"briefing-chat-{timestamp}"
         ep_dir = EPISODES_DIR / ep_id
         final_path = generate_episode_audio(client, script, ep_dir, voice_a_id, voice_b_id)
-
         dest = EPISODES_DIR / f"{ep_id}.mp3"
         shutil.copy2(final_path, dest)
         log_production()
@@ -594,6 +787,52 @@ def _run_chat(job_id, message, existing_topics, voice_alex, voice_morgan):
         import traceback; traceback.print_exc()
         update_job(job_id, status="error", error=str(e))
 
+
+def _run_create_series(series_id, topic_or_prompt, num_episodes, voice_alex, voice_morgan):
+    """Generate outline then kick off sequential episode production."""
+    try:
+        series_list = load_series()
+        s = next((x for x in series_list if x["id"] == series_id), None)
+        if not s: return
+
+        # Step 1: generate outline
+        s["status"] = "outlining"
+        save_series(series_list)
+        episodes = generate_series_outline(topic_or_prompt, num_episodes)
+
+        # Step 2: create a job_id per episode, store in series
+        job_ids = []
+        for ep in episodes:
+            jid = create_job("series_ep", series_id=series_id, series_ep=ep["episode_number"])
+            job_ids.append(jid)
+
+        series_list = load_series()
+        s = next((x for x in series_list if x["id"] == series_id), None)
+        s["episodes"] = episodes
+        s["job_ids"] = job_ids
+        s["status"] = "producing"
+        s["total"] = len(episodes)
+        s["completed"] = 0
+        save_series(series_list)
+
+        # Step 3: produce episodes sequentially in this thread
+        _run_series(series_id, episodes, voice_alex, voice_morgan)
+
+        series_list = load_series()
+        s = next((x for x in series_list if x["id"] == series_id), None)
+        if s:
+            s["status"] = "done"
+            save_series(series_list)
+
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        series_list = load_series()
+        s = next((x for x in series_list if x["id"] == series_id), None)
+        if s:
+            s["status"] = "error"
+            s["error"] = str(e)
+            save_series(series_list)
+
 # ---------------------------------------------------------------------------
 # ROUTES
 # ---------------------------------------------------------------------------
@@ -614,11 +853,127 @@ def serve_feed():
         print(f"Feed rebuild failed: {e}")
     if FEED_FILE.exists():
         return send_from_directory(DATA_DIR, 'feed.xml', mimetype='application/rss+xml')
-    return "No episodes yet — generate your first briefing.", 404
+    return "No episodes yet.", 404
+
+# --- Admin ---
+
+@app.route('/api/queue', methods=['GET'])
+def api_queue_status():
+    """Return all active (queued + running) jobs."""
+    jobs = get_all_jobs()
+    active = [j for j in jobs.values() if j["status"] in ("queued", "running")]
+    active.sort(key=lambda j: j["created_at"])
+    return jsonify({"active": active, "total_active": len(active)})
+
+@app.route('/api/queue/clear', methods=['POST'])
+def api_queue_clear():
+    """Clear all queued and errored jobs."""
+    cleared = clear_queue()
+    return jsonify({"success": True, "cleared": cleared})
+
+@app.route('/api/feed/rebuild', methods=['POST'])
+def api_feed_rebuild():
+    """Force RSS feed rebuild."""
+    try:
+        build_feed()
+        ep_count = len([e for e in load_episodes() if not e.get("is_trailer")])
+        return jsonify({"success": True, "episodes_in_feed": ep_count})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route('/api/autoqueue', methods=['POST'])
+def api_autoqueue():
+    """Pull latest AR intelligence and queue one episode."""
+    data = request.json or {}
+    voice_alex = data.get("voice_alex", "Chris - Charming, Down-to-Earth")
+    voice_morgan = data.get("voice_morgan", "Matilda - Knowledgable, Professional")
+    if not ANTHROPIC_API_KEY or not ELEVEN_API_KEY:
+        return jsonify({"success": False, "error": "API keys not configured"})
+    job_id = autoqueue_ar_topic(voice_alex, voice_morgan)
+    if job_id:
+        return jsonify({"success": True, "job_id": job_id})
+    return jsonify({"success": False, "error": "Auto-queue failed — check AR dashboard connectivity"})
+
+# --- Series ---
+
+@app.route('/api/series', methods=['GET'])
+def api_series_list():
+    series = load_series()
+    return jsonify({"series": series})
+
+@app.route('/api/series', methods=['POST'])
+def api_series_create():
+    """
+    Create a series. Body:
+    { "topic": "topic string or URL", "topic_data": {...}, "num_episodes": 6,
+      "voice_alex": "...", "voice_morgan": "..." }
+    """
+    data = request.json or {}
+    topic_data = data.get("topic_data")
+    topic_str = data.get("topic", "").strip()
+    num_episodes = int(data.get("num_episodes", 6))
+    voice_alex = data.get("voice_alex", "Chris - Charming, Down-to-Earth")
+    voice_morgan = data.get("voice_morgan", "Matilda - Knowledgable, Professional")
+
+    if not topic_data and not topic_str:
+        return jsonify({"success": False, "error": "topic or topic_data required"})
+    if not ANTHROPIC_API_KEY or not ELEVEN_API_KEY:
+        return jsonify({"success": False, "error": "API keys not configured"})
+
+    topic_or_prompt = topic_data if topic_data else topic_str
+    series_title = topic_data["title"] if topic_data else topic_str[:80]
+
+    series_id = str(uuid.uuid4())[:8]
+    series_entry = {
+        "id": series_id,
+        "title": series_title,
+        "num_episodes": num_episodes,
+        "status": "queued",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "episodes": [],
+        "job_ids": [],
+        "total": num_episodes,
+        "completed": 0,
+        "error": None,
+    }
+    series_list = load_series()
+    series_list.append(series_entry)
+    save_series(series_list)
+
+    threading.Thread(
+        target=_run_create_series,
+        args=(series_id, topic_or_prompt, num_episodes, voice_alex, voice_morgan),
+        daemon=True
+    ).start()
+
+    return jsonify({"success": True, "series_id": series_id, "title": series_title})
+
+@app.route('/api/series/<series_id>', methods=['GET'])
+def api_series_status(series_id):
+    series = load_series()
+    s = next((x for x in series if x["id"] == series_id), None)
+    if not s:
+        return jsonify({"error": "Series not found"}), 404
+    # Enrich with per-job status
+    if s.get("job_ids"):
+        job_statuses = []
+        for i, jid in enumerate(s["job_ids"]):
+            j = get_job(jid)
+            ep_title = s["episodes"][i]["title"] if i < len(s.get("episodes", [])) else f"Episode {i+1}"
+            job_statuses.append({
+                "episode": i + 1,
+                "title": ep_title,
+                "job_id": jid,
+                "status": j["status"] if j else "unknown",
+                "progress": j.get("progress", "") if j else "",
+            })
+        s["job_statuses"] = job_statuses
+    return jsonify(s)
+
+# --- Core ---
 
 @app.route('/api/job/<job_id>')
 def api_job_status(job_id):
-    """Poll this to check generation progress. status: queued|running|done|error"""
     job = get_job(job_id)
     if not job:
         return jsonify({"error": "Job not found"}), 404
@@ -656,7 +1011,6 @@ def api_topics():
 
 @app.route('/api/chat', methods=['POST'])
 def api_chat():
-    """Returns job_id immediately. Poll /api/job/<job_id> for status."""
     data = request.json
     message = data.get("message", "").strip()
     existing_topics = data.get("existing_topics", [])
@@ -680,7 +1034,6 @@ def api_chat():
 
 @app.route('/api/generate', methods=['POST'])
 def api_generate():
-    """Returns job_id immediately. Poll /api/job/<job_id> for status."""
     data = request.json
     topic_data = data.get("topic_data")
     topic_title = data.get("topic", "").strip()
