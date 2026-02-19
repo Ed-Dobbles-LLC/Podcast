@@ -18,6 +18,9 @@ ELEVEN_API_KEY = os.environ.get("ELEVEN_LABS_API_KEY") or os.environ.get("ELEVEN
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 WEEKLY_CAP = 5  # max productions per week
 
+# Base URL for the feed — used to build audio URLs
+BASE_URL = os.environ.get("BASE_URL", "https://intelligence-briefings-production.up.railway.app")
+
 for d in [DATA_DIR, EPISODES_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
@@ -154,7 +157,10 @@ def call_anthropic(messages, max_tokens=2500, use_web_search=False):
         data=payload,
         headers=headers
     )
-    with urllib.request.urlopen(req, timeout=60) as resp:
+    # FIX: Increased timeout from 60s to 180s — web search + script gen was timing out,
+    # causing silent fallback to the 5-segment hardcoded script (hence ~50 sec episodes)
+    timeout = 180 if use_web_search else 60
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read())
 
 def extract_text(data):
@@ -203,7 +209,7 @@ def generate_topics_via_claude():
 # ---------------------------------------------------------------------------
 
 CHAT_SYSTEM = """You are an editorial producer for an executive intelligence podcast.
-The listener is a senior analytics and AI executive (former VP at Diageo, CAO at Overproof, 
+The listener is a senior analytics and AI executive (former VP at Diageo, CAO at Overproof,
 building agentic AI systems, C-suite job seeker).
 
 You receive one of two types of input:
@@ -232,12 +238,12 @@ def chat_to_topic(user_message, existing_topics=None):
         for t in existing_topics:
             context += f"#{t['rank']}: {t['title']}\n"
         context += "\n"
-    
+
     data = call_anthropic([{
         "role": "user",
         "content": context + user_message
     }], max_tokens=1000)
-    
+
     text = extract_text(data).strip()
     if text.startswith("```"):
         text = text.split("```")[1]
@@ -264,7 +270,7 @@ Return a JSON array of dialogue segments:
 
 TARGET LENGTH based on depth:
 - executive: 6-8 segments (~3 min)
-- standard: 12-16 segments (~8 min)  
+- standard: 12-16 segments (~8 min)
 - deep: 20-28 segments (~15 min)
 
 STRUCTURE:
@@ -279,7 +285,7 @@ SOURCES: [comma-separated list of sources/publications you referenced]"""
 
 def generate_grounded_script(topic, depth="standard", production_brief=""):
     brief_section = f"\nPRODUCTION BRIEF (user's specific focus):\n{production_brief}\n" if production_brief else ""
-    
+
     prompt = f"""Write an executive podcast script on this topic:
 
 TITLE: {topic['title']}
@@ -295,7 +301,7 @@ Search for current, relevant information before writing. Ground every claim."""
         data = call_anthropic([{"role": "user", "content": prompt}],
                               max_tokens=4000, use_web_search=True)
         full_text = extract_text(data)
-        
+
         # Split script from sources
         sources = []
         script_text = full_text
@@ -303,30 +309,106 @@ Search for current, relevant information before writing. Ground every claim."""
             parts = full_text.rsplit("SOURCES:", 1)
             script_text = parts[0].strip()
             sources = [s.strip() for s in parts[1].strip().split(",") if s.strip()]
-        
+
         # Parse JSON
         if "```" in script_text:
             script_text = script_text.split("```")[1]
             if script_text.startswith("json"): script_text = script_text[4:]
-        
+
         script = json.loads(script_text.strip())
+        print(f"Script generated successfully: {len(script)} segments")
         return script, sources
     except Exception as e:
         print(f"Script generation failed: {e}")
-        # Fallback
+        # Fallback — 8 segments so even fallback is longer than 50 sec
         return [
-            {"host": "Alex", "text": f"Today we're examining: {topic['title']}. {topic['tension']}"},
-            {"host": "Morgan", "text": f"The strategic implication here is significant. {topic['why_it_matters']}"},
-            {"host": "Alex", "text": f"And here's what sophisticated leaders consistently get wrong. {topic.get('common_mistake', '')}"},
-            {"host": "Morgan", "text": "The question every executive should be asking is: what's the decision you need to make differently because of this?"},
-            {"host": "Alex", "text": "That's the briefing. Sit with the tension. We'll see you next time."}
+            {"host": "Alex", "text": f"Today we're examining a tension that most executives in this space are actively avoiding. {topic['title']}."},
+            {"host": "Morgan", "text": f"And the core of it is this: {topic['tension']}"},
+            {"host": "Alex", "text": f"Here's why this matters right now. {topic['why_it_matters']}"},
+            {"host": "Morgan", "text": f"What we consistently see sophisticated leaders get wrong: {topic.get('common_mistake', 'They optimize for visibility over actual impact.')}"},
+            {"host": "Alex", "text": f"The first question every executive should be sitting with: {topic.get('sub_questions', ['Where is the real exposure in your current approach?'])[0]}"},
+            {"host": "Morgan", "text": f"And the second: {topic.get('sub_questions', ['', 'What would you do differently if you knew this was the trajectory?'])[1] if len(topic.get('sub_questions', [])) > 1 else 'What decision does this change for you in the next 90 days?'}"},
+            {"host": "Alex", "text": "The executives who navigate this well aren't the ones who have the best data. They're the ones who ask the better question earlier."},
+            {"host": "Morgan", "text": "That's the briefing. Sit with the tension."}
         ], []
 
 def build_trailer_script(topic):
     return [
         {"host": "Alex", "text": topic.get("trailer_hook", topic["tension"])},
-        {"host": "Alex", "text": f"If you want the full deep dive on {topic['title']}, hit Create Episode. I'm Alex."}
+        {"host": "Alex", "text": f"If you want the full deep dive on {topic['title']}, hit Generate Briefing. I'm Alex."}
     ], []
+
+# ---------------------------------------------------------------------------
+# RSS FEED GENERATION
+# ---------------------------------------------------------------------------
+
+def build_feed():
+    """
+    Build a valid Apple Podcasts-compatible RSS 2.0 feed from episodes.json
+    and write it to FEED_FILE. Called every time an episode is saved.
+    """
+    eps = load_episodes()
+    # Only include full episodes (not trailers) in the main feed, sorted newest first
+    feed_eps = sorted(
+        [e for e in eps if not e.get("is_trailer")],
+        key=lambda e: e.get("published", ""),
+        reverse=True
+    )
+
+    def esc(s):
+        return (str(s)
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace('"', "&quot;"))
+
+    items = []
+    for ep in feed_eps:
+        audio_url = f"{BASE_URL}/episodes/{esc(ep['file'])}"
+        file_size = ep.get("file_size", 0)
+        pub_date = ep.get("published", datetime.now(timezone.utc).isoformat())
+        # Convert ISO to RFC 2822 for RSS
+        try:
+            dt = datetime.fromisoformat(pub_date)
+            pub_rfc = dt.strftime("%a, %d %b %Y %H:%M:%S +0000")
+        except Exception:
+            pub_rfc = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
+
+        items.append(f"""    <item>
+      <title>{esc(ep.get('title', 'Intelligence Briefing'))}</title>
+      <description>{esc(ep.get('description', ''))}</description>
+      <enclosure url="{audio_url}" length="{file_size}" type="audio/mpeg"/>
+      <guid isPermaLink="false">{esc(ep.get('id', audio_url))}</guid>
+      <pubDate>{pub_rfc}</pubDate>
+      <itunes:title>{esc(ep.get('title', 'Intelligence Briefing'))}</itunes:title>
+      <itunes:summary>{esc(ep.get('description', ''))}</itunes:summary>
+      <itunes:duration>{ep.get('duration', '')}</itunes:duration>
+      <itunes:explicit>no</itunes:explicit>
+    </item>""")
+
+    feed_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+  xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"
+  xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Intelligence Briefings</title>
+    <link>{BASE_URL}</link>
+    <description>Executive intelligence briefings on AI, analytics, and enterprise strategy. Powered by Ed Borasky's editorial engine.</description>
+    <language>en-us</language>
+    <itunes:author>Ed Borasky</itunes:author>
+    <itunes:owner>
+      <itunes:name>Ed Borasky</itunes:name>
+    </itunes:owner>
+    <itunes:category text="Business"/>
+    <itunes:explicit>no</itunes:explicit>
+    <itunes:type>episodic</itunes:type>
+    <lastBuildDate>{datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")}</lastBuildDate>
+{chr(10).join(items)}
+  </channel>
+</rss>"""
+
+    FEED_FILE.write_text(feed_xml, encoding="utf-8")
+    print(f"Feed rebuilt: {len(feed_eps)} episodes -> {FEED_FILE}")
 
 # ---------------------------------------------------------------------------
 # AUDIO
@@ -382,6 +464,11 @@ def save_episode(entry):
     eps = load_episodes()
     eps.append(entry)
     EPISODES_JSON.write_text(json.dumps(eps, indent=2))
+    # FIX: Rebuild feed every time an episode is saved
+    try:
+        build_feed()
+    except Exception as e:
+        print(f"Feed build failed (non-fatal): {e}")
 
 # ---------------------------------------------------------------------------
 # ROUTES
@@ -397,9 +484,14 @@ def serve_episode(filename):
 
 @app.route('/feed.xml')
 def serve_feed():
+    # Rebuild on every request so feed is always current
+    try:
+        build_feed()
+    except Exception as e:
+        print(f"Feed rebuild on request failed: {e}")
     if FEED_FILE.exists():
         return send_from_directory(DATA_DIR, 'feed.xml', mimetype='application/rss+xml')
-    return "No feed yet", 404
+    return "No episodes yet — generate your first briefing to create the feed.", 404
 
 @app.route('/api/voices')
 def api_voices():
