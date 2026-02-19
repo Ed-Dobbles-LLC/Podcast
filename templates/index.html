@@ -316,12 +316,12 @@ function renderBriefings() {
       <div class="bc-tension">${t.tension}</div>
       <div class="bc-status" id="bs-${i}"></div>
       <div class="bc-audio" id="ba-${i}"></div>
-      <button class="btn-play" id="bp-${i}" onclick="playBriefing(${i})">▶ Play Briefing</button>
+      <button class="btn-play" id="bp-${i}" onclick="generateBriefing(${i})">⚡ Generate Briefing</button>
       <div class="bc-sources" id="bsrc-${i}"></div>
     </div>`).join('');
 }
 
-async function playBriefing(idx) {
+async function generateBriefing(idx) {
   const topic = allTopics[idx];
   const btn = document.getElementById('bp-' + idx);
   const status = document.getElementById('bs-' + idx);
@@ -349,7 +349,7 @@ async function playBriefing(idx) {
     clearInterval(tick);
     const data = await res.json();
     if (data.success) {
-      status.textContent = '✓ Ready to play';
+      status.textContent = '✓ Episode ready';
       audioDiv.innerHTML = `<audio controls src="/episodes/${data.episode.file}"></audio>`;
       btn.textContent = '↺ Regenerate';
       btn.disabled = false;
@@ -363,13 +363,13 @@ async function playBriefing(idx) {
     } else {
       clearInterval(tick);
       status.textContent = '⚠ ' + (data.error || 'Error — try again');
-      btn.disabled = false; btn.textContent = '▶ Retry';
+      btn.disabled = false; btn.textContent = '⚡ Retry';
       card.classList.remove('playing');
     }
   } catch(e) {
     clearInterval(tick);
     status.textContent = '⚠ Connection error';
-    btn.disabled = false; btn.textContent = '▶ Retry';
+    btn.disabled = false; btn.textContent = '⚡ Retry';
     card.classList.remove('playing');
   }
 }
