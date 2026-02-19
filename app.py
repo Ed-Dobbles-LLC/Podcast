@@ -322,8 +322,9 @@ After the JSON array, add on a new line:
 SOURCES: source1, source2, source3"""
 
     try:
+        # web_search disabled for reliability testing — re-enable after confirming pipeline works
         data = call_anthropic([{"role": "user", "content": prompt}],
-                              max_tokens=4000, use_web_search=True)
+                              max_tokens=4000, use_web_search=False)
         full_text = extract_text(data)
 
         sources = []
@@ -338,10 +339,12 @@ SOURCES: source1, source2, source3"""
             if script_text.startswith("json"): script_text = script_text[4:]
 
         script = json.loads(script_text.strip())
-        print(f"Script generated: {len(script)} segments")
+        print(f"[SCRIPT OK] {len(script)} segments generated")
         return script, sources
     except Exception as e:
-        print(f"Script generation failed: {e}")
+        import traceback
+        print(f"[SCRIPT FAIL] {type(e).__name__}: {e}")
+        traceback.print_exc()
         sq = topic.get('sub_questions', [])
         return [
             {"host": "Alex", "text": f"Today we're examining a tension most executives are actively avoiding. {topic['title']}."},
