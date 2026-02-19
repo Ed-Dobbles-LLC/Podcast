@@ -252,6 +252,21 @@ select { width: 100%; background: var(--surface2); border: 1px solid var(--borde
           <div class="chat-result-sources" id="chatResultSources"></div>
         </div>
       </div>
+
+      <!-- YOU MIGHT BE INTERESTED -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-family:'Rajdhani',sans-serif;font-size:0.75rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--amber)">You Might Be Interested</div>
+          <div style="font-size:0.73rem;color:var(--muted);margin-top:0.2rem">10 ideas based on your history + trending signals. No audio yet — commission what interests you.</div>
+        </div>
+        <button onclick="loadSuggestions(true)" style="background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted);font-family:'Rajdhani',sans-serif;font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:5px 10px;cursor:pointer;white-space:nowrap;flex-shrink:0" onmouseover="this.style.color='var(--white)'" onmouseout="this.style.color='var(--muted)'">↺ Refresh</button>
+      </div>
+      <div class="discover-grid" id="suggestionsGrid" style="margin-bottom:2rem">
+        <div class="empty-state" style="grid-column:1/-1;font-size:0.78rem">Loading suggestions...</div>
+      </div>
+
+      <!-- TODAY'S TOPICS -->
+      <div style="font-family:'Rajdhani',sans-serif;font-size:0.75rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid var(--border)">Today's Editorial Topics</div>
       <div class="discover-grid" id="discoverGrid">
         <div class="empty-state" style="grid-column:1/-1">Loading topics...</div>
       </div>
@@ -296,6 +311,22 @@ select { width: 100%; background: var(--surface2); border: 1px solid var(--borde
         <div class="rss-url" id="rssUrlAdmin">https://intelligence-briefings-production.up.railway.app/feed.xml</div>
         <button class="btn-copy" onclick="copyRSS('rssUrlAdmin')">Copy Feed URL</button>
       </div>
+      <div class="admin-section">
+        <div class="admin-title">Nightly Trailer Queue</div>
+        <div class="admin-desc">Every night at 22:00 CT, 6 high-confidence trailers are automatically queued based on your history and trending signals. Run manually below — the system won't re-run if it already ran today (unless you force it).</div>
+        <div class="admin-row">
+          <button class="btn-admin amber" id="nightlyBtn" onclick="triggerNightly(false)">▶ Queue Tonight's 6 Trailers</button>
+          <button class="btn-admin danger" onclick="triggerNightly(true)" style="font-size:0.68rem">Force Re-run</button>
+          <span class="admin-status" id="nightlyStatus"></span>
+        </div>
+        <div id="nightlyResults" style="margin-top:0.5rem"></div>
+        <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid var(--border)">
+          <div style="font-size:0.72rem;color:var(--muted);margin-bottom:0.4rem;font-family:Rajdhani,sans-serif;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;">Cron Setup</div>
+          <div style="font-size:0.75rem;color:var(--muted);line-height:1.6;margin-bottom:0.5rem">Daily at 22:00 America/Chicago on <a href="https://cron-job.org" target="_blank" style="color:var(--blue)">cron-job.org</a>:</div>
+          <div style="font-family:monospace;font-size:0.7rem;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:6px 10px;color:var(--white);word-break:break-all" id="nightlyCronUrl">https://intelligence-briefings-production.up.railway.app/api/cron/nightly-trailers?secret=YOUR_CRON_SECRET</div>
+        </div>
+      </div>
+
       <div class="admin-section">
         <div class="admin-title">Auto-Queue from AnswerRocket</div>
         <div class="admin-desc">Pull the latest AR competitive intelligence and automatically queue one timely episode. Use this to keep your pipeline continuously fed without manual topic selection.</div>
@@ -366,9 +397,10 @@ function switchTab(name) {
   document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', tabs[i] === name));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  if (name === 'admin') refreshQueue();
+  if (name === 'admin') { refreshQueue(); loadNightlyStatus(); }
   if (name === 'series') loadSeries();
   if (name === 'episodes') loadEpisodes();
+  if (name === 'discover') { if(!allSuggestions.length) loadSuggestions(); }
 }
 
 async function init() {
@@ -455,45 +487,138 @@ async function generateBriefing(idx) {
   } catch(e) { status.textContent='⚠ Connection error'; btn.disabled=false; btn.textContent='⚡ Retry'; card.classList.remove('playing'); }
 }
 
-function getDismissed() { try { return JSON.parse(sessionStorage.getItem('dismissed')||'[]'); } catch(e) { return []; } }
-function addDismissed(title) { const d=getDismissed(); d.push(title); sessionStorage.setItem('dismissed',JSON.stringify(d)); }
+function getDismissed() { try { return JSON.parse(localStorage.getItem('dismissed_topics')||'[]'); } catch(e) { return []; } }
+function addDismissed(title) { const d=getDismissed(); if(!d.includes(title)) d.push(title); localStorage.setItem('dismissed_topics',JSON.stringify(d)); }
 
+// ---- DISCOVER: Suggestions ("You Might Be Interested") ----
+let allSuggestions = [];
+
+async function loadSuggestions(refresh=false) {
+  const el = document.getElementById('suggestionsGrid');
+  if(el) el.innerHTML = '<div class="empty-state" style="grid-column:1/-1;font-size:0.78rem">Loading suggestions...</div>';
+  try {
+    const url = '/api/discover/suggestions' + (refresh ? '?refresh=true' : '');
+    const data = await fetch(url).then(r=>r.json());
+    allSuggestions = data.suggestions || [];
+    renderSuggestions();
+  } catch(e) {
+    if(el) el.innerHTML = '<div class="empty-state" style="grid-column:1/-1">Could not load suggestions.</div>';
+  }
+}
+
+function renderSuggestions() {
+  const el = document.getElementById('suggestionsGrid');
+  if(!el) return;
+  const dismissed = getDismissed();
+  const visible = allSuggestions.filter(s => !dismissed.includes(s.title));
+  if(!visible.length) { el.innerHTML = '<div class="empty-state" style="grid-column:1/-1;font-size:0.78rem">All caught up. <button onclick="loadSuggestions(true)" style="background:none;border:none;color:var(--red-bright);cursor:pointer;font-family:Rajdhani,sans-serif;font-size:0.78rem;font-weight:700;">Refresh</button></div>'; return; }
+  el.innerHTML = visible.map((s,i) => {
+    const freshColor = s.freshness === 'time-sensitive' ? 'var(--red-bright)' : s.freshness === 'trending' ? 'var(--amber)' : 'var(--muted)';
+    return `<div class="topic-card" id="sg-${i}" style="border-left:2px solid rgba(255,255,255,0.06)">
+      <div class="tc-header">
+        <div class="tc-title">${s.title}</div>
+        <span class="tc-rank" style="border-color:rgba(255,255,255,0.15);color:var(--muted)">#${s.rank||i+1}</span>
+      </div>
+      <div><div class="tc-label">Why This, Why Now</div><div class="tc-text">${s.tension}</div></div>
+      <div style="font-size:0.7rem;color:${freshColor};font-family:'Rajdhani',sans-serif;letter-spacing:0.08em;text-transform:uppercase;margin-top:0.2rem">${s.freshness||'evergreen'}</div>
+      ${s.confidence_rationale ? `<div class="tc-text" style="font-style:italic;font-size:0.72rem;color:rgba(139,148,158,0.7);margin-top:0.3rem">${s.confidence_rationale}</div>` : ''}
+      <div class="tc-actions" style="margin-top:0.5rem">
+        <button class="btn-tc commission" onclick="commissionSuggestion(${i})" id="sgcb-${i}">Commission</button>
+        <button class="btn-tc series" onclick="commissionSuggestionSeries(${i})">+ Series</button>
+        <button class="btn-tc dismiss" onclick="dismissSuggestion(${i})">✕</button>
+      </div>
+      <div class="tc-status" id="sgs-${i}"></div>
+    </div>`;
+  }).join('');
+}
+
+function dismissSuggestion(i) {
+  const visible = allSuggestions.filter(s => !getDismissed().includes(s.title));
+  if(visible[i]) addDismissed(visible[i].title);
+  renderSuggestions();
+}
+
+async function commissionSuggestion(i) {
+  const visible = allSuggestions.filter(s => !getDismissed().includes(s.title));
+  const s = visible[i]; if(!s) return;
+  const btn = document.getElementById('sgcb-'+i), status = document.getElementById('sgs-'+i);
+  btn.disabled=true; btn.textContent='Queuing...'; status.textContent='Queued...';
+  const topicData = {title:s.title,tension:s.tension,why_it_matters:s.why_it_matters||'',common_mistake:'',sub_questions:[],trailer_hook:''};
+  try {
+    const res = await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({topic_data:topicData,depth:'standard',trailer:false,
+        voice_alex:document.getElementById('voice_alex').value,voice_morgan:document.getElementById('voice_morgan').value})});
+    const data = await res.json();
+    if(!data.success){btn.disabled=false;btn.textContent='Commission';status.textContent='⚠ '+(data.error||'Error');return;}
+    btn.textContent='Producing...';
+    pollJob(data.job_id, msg=>status.textContent=msg,
+      result=>{status.textContent='✓ Ready — see Episodes';btn.textContent='✓ Done';weeklyCount++;updateCapDisplay();loadEpisodes();},
+      err=>{btn.disabled=false;btn.textContent='Commission';status.textContent='⚠ '+err;});
+  } catch(e){btn.disabled=false;btn.textContent='Commission';status.textContent='⚠ Connection error';}
+}
+
+function commissionSuggestionSeries(i) {
+  const visible = allSuggestions.filter(s => !getDismissed().includes(s.title));
+  const s = visible[i]; if(!s) return;
+  const topicData = {title:s.title,tension:s.tension,why_it_matters:s.why_it_matters||'',common_mistake:'',sub_questions:[],trailer_hook:''};
+  // Temporarily push to allTopics so openSeriesModal can use it
+  const tempIdx = allTopics.length;
+  allTopics.push(topicData);
+  openSeriesModal(tempIdx);
+}
+
+// ---- DISCOVER: Core topics grid ----
 function renderDiscover() {
   const dismissed = getDismissed(), visible = allTopics.filter(t => !dismissed.includes(t.title));
   const grid = document.getElementById('discoverGrid');
-  if (!visible.length) { grid.innerHTML='<div class="empty-state" style="grid-column:1/-1">All reviewed. <button onclick="sessionStorage.clear();renderDiscover();" style="background:none;border:none;color:var(--red-bright);cursor:pointer;font-family:Rajdhani,sans-serif;text-transform:uppercase;font-size:0.85rem;font-weight:700;">Reset</button></div>'; return; }
-  grid.innerHTML = visible.map((t,i) => {
+  if (!visible.length) { grid.innerHTML='<div class="empty-state" style="grid-column:1/-1">All reviewed. <button onclick="localStorage.removeItem(\'dismissed_topics\');renderDiscover();renderSuggestions();" style="background:none;border:none;color:var(--red-bright);cursor:pointer;font-family:Rajdhani,sans-serif;text-transform:uppercase;font-size:0.85rem;font-weight:700;">Reset</button></div>'; return; }
+  grid.innerHTML = visible.map((t) => {
+    // FIX: use topic title as stable identifier, not array index
     const sqHtml = t.sub_questions ? t.sub_questions.map(q=>`<li style="margin-bottom:0.3rem">${q}</li>`).join('') : '';
-    return `<div class="topic-card" id="tc-${i}">
-      <div class="tc-header"><div class="tc-title">${t.title}</div><span class="tc-rank">#${t.rank||i+1}</span></div>
+    const safeTitle = encodeURIComponent(t.title);
+    return `<div class="topic-card" id="tc-${safeTitle}">
+      <div class="tc-header"><div class="tc-title">${t.title}</div><span class="tc-rank">#${t.rank||''}</span></div>
       <div><div class="tc-label">Core Tension</div><div class="tc-text">${t.tension}</div></div>
       <div><div class="tc-label">Why It Matters</div><div class="tc-text">${t.why_it_matters}</div></div>
-      <button class="tc-expand" onclick="toggleDetail(${i})">▸ What leaders get wrong + questions</button>
-      <div class="tc-detail" id="td-${i}">
+      <button class="tc-expand" onclick="toggleDetailByTitle('${safeTitle}')">▸ What leaders get wrong + questions</button>
+      <div class="tc-detail" id="td-${safeTitle}">
         ${t.common_mistake?`<div style="margin-bottom:0.5rem"><div class="tc-label">Common Mistake</div><div class="tc-text">${t.common_mistake}</div></div>`:''}
         ${sqHtml?`<div><div class="tc-label">Discussion Questions</div><ul style="padding-left:1rem;margin-top:0.3rem;font-size:0.77rem;color:var(--muted)">${sqHtml}</ul></div>`:''}
       </div>
-      <div class="tc-audio" id="ta-${i}"></div>
-      <div class="tc-status" id="ts-${i}"></div>
+      <div class="tc-audio" id="ta-${safeTitle}"></div>
+      <div class="tc-status" id="ts-${safeTitle}"></div>
       <div class="tc-actions">
-        <button class="btn-tc preview" id="tb-${i}" onclick="previewTopic(${i})">▶ 90s</button>
-        <button class="btn-tc commission" id="cb-${i}" onclick="commissionTopic(${i})">Commission</button>
-        <button class="btn-tc series" onclick="openSeriesModal(${i})">+ Series</button>
-        <button class="btn-tc dismiss" onclick="dismissTopic(${i})">✕</button>
+        <button class="btn-tc preview" id="tb-${safeTitle}" onclick="previewTopicByTitle('${safeTitle}')">▶ 90s</button>
+        <button class="btn-tc commission" id="cb-${safeTitle}" onclick="commissionTopicByTitle('${safeTitle}')">Commission</button>
+        <button class="btn-tc series" onclick="openSeriesModalByTitle('${safeTitle}')">+ Series</button>
+        <button class="btn-tc dismiss" onclick="dismissTopicByTitle('${safeTitle}')">✕</button>
       </div>
     </div>`;
   }).join('');
 }
 
-function toggleDetail(i) {
-  const d=document.getElementById('td-'+i), btn=d.previousElementSibling, open=d.classList.toggle('open');
+function toggleDetailByTitle(safeTitle) {
+  const d=document.getElementById('td-'+safeTitle), btn=d.previousElementSibling, open=d.classList.toggle('open');
   btn.textContent=(open?'▾':'▸')+' What leaders get wrong + questions';
 }
-function dismissTopic(idx) { if(allTopics[idx]) addDismissed(allTopics[idx].title); renderDiscover(); }
+function dismissTopicByTitle(safeTitle) {
+  const title = decodeURIComponent(safeTitle);
+  addDismissed(title);
+  renderDiscover();
+}
+function getTopicByTitle(safeTitle) {
+  const title = decodeURIComponent(safeTitle);
+  return allTopics.find(t => t.title === title);
+}
+function openSeriesModalByTitle(safeTitle) {
+  const t = getTopicByTitle(safeTitle); if(!t) return;
+  const idx = allTopics.indexOf(t);
+  openSeriesModal(idx);
+}
 
-async function previewTopic(idx) {
-  const topic=allTopics[idx]; if(!topic) return;
-  const btn=document.getElementById('tb-'+idx), status=document.getElementById('ts-'+idx);
+async function previewTopicByTitle(safeTitle) {
+  const topic = getTopicByTitle(safeTitle); if(!topic) return;
+  const btn=document.getElementById('tb-'+safeTitle), status=document.getElementById('ts-'+safeTitle);
   btn.disabled=true; btn.textContent='...'; status.textContent='Queuing...';
   try {
     const res=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -502,14 +627,14 @@ async function previewTopic(idx) {
     if(!data.success){btn.textContent='▶ 90s';btn.disabled=false;status.textContent='⚠ '+(data.error||'Error');status.className='tc-status err';return;}
     pollJob(data.job_id, msg=>status.textContent=msg,
       result=>{btn.textContent='▶ Replay';btn.disabled=false;status.textContent='';
-        document.getElementById('ta-'+idx).innerHTML=`<audio controls src="/episodes/${result.episode.file}" style="width:100%;height:32px;margin-top:0.3rem"></audio>`;},
+        document.getElementById('ta-'+safeTitle).innerHTML=`<audio controls src="/episodes/${result.episode.file}" style="width:100%;height:32px;margin-top:0.3rem"></audio>`;},
       err=>{btn.textContent='▶ 90s';btn.disabled=false;status.textContent='⚠ '+err;status.className='tc-status err';});
   } catch(e){btn.textContent='▶ 90s';btn.disabled=false;status.textContent='⚠ Connection error';status.className='tc-status err';}
 }
 
-async function commissionTopic(idx) {
-  const topic=allTopics[idx]; if(!topic) return;
-  const btn=document.getElementById('cb-'+idx),prev=document.getElementById('tb-'+idx),status=document.getElementById('ts-'+idx);
+async function commissionTopicByTitle(safeTitle) {
+  const topic = getTopicByTitle(safeTitle); if(!topic) return;
+  const btn=document.getElementById('cb-'+safeTitle),prev=document.getElementById('tb-'+safeTitle),status=document.getElementById('ts-'+safeTitle);
   btn.disabled=true;prev.disabled=true;btn.textContent='Queuing...';status.textContent='Queued...';
   try {
     const res=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -705,6 +830,39 @@ async function triggerAutoQueue() {
 }
 
 function copyRSS(elId) { navigator.clipboard.writeText(document.getElementById(elId).textContent); }
+
+async function triggerNightly(force=false) {
+  const btn=document.getElementById('nightlyBtn'), statusEl=document.getElementById('nightlyStatus'), resultsEl=document.getElementById('nightlyResults');
+  btn.disabled=true; statusEl.textContent='Generating high-confidence topics...'; resultsEl.innerHTML='';
+  const url = '/api/cron/nightly-trailers' + (force ? '?force=true' : '');
+  const data = await fetch(url, {method:'POST'}).then(r=>r.json()).catch(()=>({success:false,error:'Connection error'}));
+  btn.disabled=false;
+  if(data.skipped) { statusEl.textContent='Already ran today. Use Force Re-run to override.'; return; }
+  if(!data.success) { statusEl.textContent='⚠ '+(data.error||'Failed'); return; }
+  statusEl.textContent=`✓ ${data.queued} trailers queued`;
+  if(data.job_ids && data.job_ids.length) {
+    resultsEl.innerHTML = '<div style="margin-top:0.5rem;display:flex;flex-direction:column;gap:0.25rem">' +
+      data.job_ids.map(j=>`<div style="font-size:0.72rem;color:var(--muted);padding:0.25rem 0.5rem;background:var(--surface2);border-radius:3px;display:flex;justify-content:space-between">
+        <span style="flex:1">${j.title}</span>
+        <span style="font-family:Rajdhani,sans-serif;font-size:0.65rem;font-weight:700;color:var(--amber);margin-left:0.5rem">${j.confidence ? j.confidence+'%' : ''}</span>
+      </div>`).join('') + '</div>';
+  }
+}
+
+async function loadNightlyStatus() {
+  try {
+    const data = await fetch('/api/cron/nightly-trailers/status').then(r=>r.json());
+    const run = data.run;
+    if(!run) return;
+    const el = document.getElementById('nightlyStatus');
+    if(!el) return;
+    const today = new Date().toISOString().slice(0,10);
+    const ranToday = run.date === today;
+    const done = (run.job_ids||[]).filter(j=>j.status==='done').length;
+    const total = (run.job_ids||[]).length;
+    el.textContent = ranToday ? `Last run today — ${done}/${total} trailers ready` : `Last run ${run.date}`;
+  } catch(e) {}
+}
 
 init();
 </script>

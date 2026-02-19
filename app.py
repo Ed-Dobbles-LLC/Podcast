@@ -919,6 +919,228 @@ def api_autoqueue():
         return jsonify({"success": True, "job_id": job_id})
     return jsonify({"success": False, "error": "Auto-queue failed — check AR dashboard connectivity"})
 
+@app.route('/api/discover/suggestions', methods=['GET'])
+def api_discover_suggestions():
+    """
+    Generate 10 'You Might Be Interested' topic ideas based on episode history + trending news.
+    Returns text-only topic objects (no audio).
+    Cached for the day — call /api/discover/suggestions?refresh=true to force regenerate.
+    """
+    SUGGESTIONS_CACHE = DATA_DIR / "suggestions_cache.json"
+    today = date.today().isoformat()
+    force = request.args.get("refresh", "").lower() == "true"
+
+    if not force and SUGGESTIONS_CACHE.exists():
+        try:
+            cached = json.loads(SUGGESTIONS_CACHE.read_text())
+            if cached.get("date") == today:
+                return jsonify({"suggestions": cached["suggestions"], "cached": True})
+        except Exception:
+            pass
+
+    # Build context from episode history
+    eps = load_episodes()
+    commissioned = [e["title"] for e in eps if not e.get("is_trailer")][-30:]
+    series_list = load_series()
+    series_titles = [s["title"] for s in series_list]
+
+    history_block = ""
+    if commissioned:
+        history_block += "EPISODES COMMISSIONED (most recent first):\n" + "\n".join(f"- {t}" for t in reversed(commissioned))
+    if series_titles:
+        history_block += "\n\nSERIES CREATED:\n" + "\n".join(f"- {t}" for t in series_titles)
+
+    prompt = f"""You are an editorial intelligence engine for a senior analytics/AI executive (CAO at Overproof, former VP Analytics at Diageo North America).
+
+Your job: generate 10 high-signal topic ideas the user has NOT yet covered but would find immediately compelling.
+
+USER'S HISTORY (topics already produced — DO NOT repeat these):
+{history_block if history_block else "No history yet."}
+
+EXECUTIVE PROFILE:
+- Thinks in systems, incentives, capital allocation, and moats
+- Enterprise AI: governance, multi-agent systems, ROI measurement
+- Beverage alcohol: three-tier dynamics, venue intelligence, distributor data
+- Org design: CAO/CDO role evolution, analytics talent strategy
+- Active C-suite job seeker: CAO, CDO, VP Analytics
+- Reads Stratechery and The Economist, NOT TechCrunch
+
+GENERATION RULES:
+- Generate adjacent to history but NOT redundant with it
+- Include 2-3 topics that are specifically trending in the last 30 days (use your knowledge of recent events)
+- Each topic must feel slightly uncomfortable or contrarian
+- Zero generic "AI is transforming X" topics
+- Mix: enterprise AI governance, beverage alcohol, org behavior, economic models, talent strategy
+- Weight toward topics where the user has genuine domain expertise to have an opinion
+
+Return ONLY a valid JSON array of exactly 10 objects, no markdown:
+[{{
+  "rank": 1,
+  "title": "provocative but professional title",
+  "tension": "core contrarian thesis in 1-2 sentences",
+  "why_it_matters": "strategic importance for this specific executive in 1 sentence",
+  "freshness": "evergreen | trending | time-sensitive",
+  "confidence_rationale": "1 sentence: why this is highly relevant to this user specifically"
+}}]"""
+
+    try:
+        data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=3000, use_web_search=True)
+    except Exception:
+        data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=3000, use_web_search=False)
+
+    text = extract_text(data).strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"): text = text[4:]
+    suggestions = json.loads(text)[:10]
+
+    SUGGESTIONS_CACHE.write_text(json.dumps({"date": today, "suggestions": suggestions}, indent=2))
+    return jsonify({"suggestions": suggestions, "cached": False})
+
+
+@app.route('/api/cron/nightly-trailers', methods=['GET', 'POST'])
+def api_cron_nightly_trailers():
+    """
+    Nightly job: generate 6 high-confidence trailer topics and queue them for production.
+    Confidence model:
+      - Topics adjacent to commissioned episodes = highest confidence
+      - Topics that overlap with series themes = high confidence
+      - Topics the user previewed but didn't commission = high confidence (not tracked yet, future)
+      - Trending + in user's domain = medium confidence
+    Only runs once per day unless ?force=true.
+
+    Cron-job.org URL: /api/cron/nightly-trailers?secret=YOUR_CRON_SECRET
+    Recommended: Daily at 22:00 America/Chicago
+    """
+    secret = request.args.get("secret") or request.headers.get("Authorization", "").replace("Bearer ", "")
+    if CRON_SECRET and secret != CRON_SECRET:
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+    force = request.args.get("force", "").lower() == "true"
+    TRAILER_QUEUE_LOG = DATA_DIR / "nightly_trailer_log.json"
+    today = date.today().isoformat()
+
+    # Idempotency: don't run twice in one day
+    if not force and TRAILER_QUEUE_LOG.exists():
+        try:
+            log = json.loads(TRAILER_QUEUE_LOG.read_text())
+            if log.get("date") == today:
+                return jsonify({"success": True, "skipped": True,
+                                "reason": "Already ran today", "job_ids": log.get("job_ids", [])})
+        except Exception:
+            pass
+
+    if not ANTHROPIC_API_KEY or not ELEVEN_API_KEY:
+        return jsonify({"success": False, "error": "API keys not configured"}), 500
+
+    # Build confidence context
+    eps = load_episodes()
+    commissioned_titles = [e["title"] for e in eps if not e.get("is_trailer")][-20:]
+    series_list = load_series()
+    series_titles = [s["title"] for s in series_list]
+
+    history_block = ""
+    if commissioned_titles:
+        history_block += "COMMISSIONED EPISODES:\n" + "\n".join(f"- {t}" for t in commissioned_titles)
+    if series_titles:
+        history_block += "\n\nSERIES ARCS:\n" + "\n".join(f"- {t}" for t in series_titles)
+
+    prompt = f"""You are a high-precision editorial recommender for a senior analytics/AI executive (CAO at Overproof, former VP Analytics Diageo North America).
+
+Your task: Generate exactly 6 topic candidates for overnight trailer production. These must be topics you are HIGHLY CONFIDENT this specific executive will want to hear when they wake up.
+
+CONFIDENCE CRITERIA (use all of these):
+1. Direct adjacency to their commissioned history — deepens or challenges something they already engaged with
+2. Emerging situation in their domain (enterprise AI, beverage alcohol, analytics org design) from the last 2-4 weeks
+3. High decision leverage — something they could act on or discuss in a board/C-suite context within 30 days
+4. Contrarian angle — challenges a comfortable belief held by their peer set
+5. Genuine relevance to their job search (CAO/CDO/VP Analytics positioning)
+
+THEIR HISTORY (AVOID DIRECT REPEATS, but adjacent topics are highly encouraged):
+{history_block if history_block else "No history yet."}
+
+EXECUTIVE PROFILE:
+- Ed Dobbles, CAO at Overproof (beverage alcohol AI/analytics)
+- Former VP Advanced Analytics, Diageo North America
+- Building multi-agent AI governance frameworks
+- Enterprise deals with Heineken, Beam Suntory, Diageo
+- Thinks in systems, incentives, moats, capital allocation
+- C-suite peer network: CDOs, CAOs, VPs Analytics at Fortune 500
+
+CONSTRAINTS:
+- All 6 must clear a HIGH confidence bar — if you're not sure, don't include it
+- Mix: 2-3 enterprise AI/governance, 1-2 beverage alcohol/CPG, 1-2 org/talent/career
+- Include at least 2 topics that feel TIME-SENSITIVE (relevant to the next 30 days)
+- Each topic needs a spoken-word trailer hook that makes an executive stop what they're doing
+
+Return ONLY a valid JSON array of exactly 6 objects, no markdown:
+[{{
+  "rank": 1,
+  "title": "provocative but professional title",
+  "tension": "core contrarian thesis in 1-2 sentences",
+  "why_it_matters": "strategic importance in 1 sentence",
+  "common_mistake": "what sophisticated leaders get wrong",
+  "sub_questions": ["question 1", "question 2", "question 3"],
+  "trailer_hook": "3-4 sentence spoken-word hook, direct to a peer executive",
+  "confidence_score": 85,
+  "confidence_rationale": "1-2 sentences: specific reason this is high-confidence for this user"
+}}]"""
+
+    try:
+        data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=3000, use_web_search=True)
+    except Exception:
+        data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=3000, use_web_search=False)
+
+    text = extract_text(data).strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"): text = text[4:]
+    trailer_topics = json.loads(text)[:6]
+
+    # Queue all 6 as trailers
+    job_ids = []
+    voice_alex = "Chris - Charming, Down-to-Earth"
+    voice_morgan = "Matilda - Knowledgable, Professional"
+
+    for topic in trailer_topics:
+        jid = create_job("generate")
+        threading.Thread(
+            target=_run_generate,
+            args=(jid, topic, "executive", voice_alex, voice_morgan, True, ""),
+            daemon=True
+        ).start()
+        job_ids.append({"job_id": jid, "title": topic["title"], "confidence": topic.get("confidence_score", 0)})
+
+    # Log run
+    TRAILER_QUEUE_LOG.write_text(json.dumps({
+        "date": today,
+        "run_at": datetime.now(timezone.utc).isoformat(),
+        "job_ids": job_ids,
+        "topics": trailer_topics,
+    }, indent=2))
+
+    print(f"[NIGHTLY] Queued {len(job_ids)} trailers")
+    return jsonify({"success": True, "queued": len(job_ids), "job_ids": job_ids,
+                    "triggered_at": datetime.now(timezone.utc).isoformat()})
+
+
+@app.route('/api/cron/nightly-trailers/status', methods=['GET'])
+def api_nightly_trailer_status():
+    """Return status of last nightly trailer run."""
+    TRAILER_QUEUE_LOG = DATA_DIR / "nightly_trailer_log.json"
+    if not TRAILER_QUEUE_LOG.exists():
+        return jsonify({"run": None})
+    try:
+        log = json.loads(TRAILER_QUEUE_LOG.read_text())
+        # Enrich with current job statuses
+        for item in log.get("job_ids", []):
+            j = get_job(item["job_id"])
+            item["status"] = j["status"] if j else "unknown"
+        return jsonify({"run": log})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/cron/autoqueue', methods=['GET', 'POST'])
 def api_cron_autoqueue():
     """
