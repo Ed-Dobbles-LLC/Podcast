@@ -1,0 +1,561 @@
+import os
+import json
+import shutil
+from pathlib import Path
+from datetime import datetime, timezone, date, timedelta
+from flask import Flask, jsonify, request, send_from_directory, render_template
+
+app = Flask(__name__)
+
+DATA_DIR = Path(os.environ.get("DATA_DIR", Path.home() / "Intelligence-Briefings"))
+EPISODES_DIR = DATA_DIR / "episodes"
+TOPICS_CACHE = DATA_DIR / "topics_cache.json"
+FEED_FILE = DATA_DIR / "feed.xml"
+EPISODES_JSON = DATA_DIR / "episodes.json"
+PRODUCTION_LOG = DATA_DIR / "production_log.json"
+
+ELEVEN_API_KEY = os.environ.get("ELEVEN_LABS_API_KEY") or os.environ.get("ELEVENLABS_API_KEY", "")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+WEEKLY_CAP = 5  # max productions per week
+
+for d in [DATA_DIR, EPISODES_DIR]:
+    d.mkdir(parents=True, exist_ok=True)
+
+# ---------------------------------------------------------------------------
+# PRODUCTION CAP
+# ---------------------------------------------------------------------------
+
+def get_production_log():
+    if not PRODUCTION_LOG.exists():
+        return []
+    try:
+        return json.loads(PRODUCTION_LOG.read_text())
+    except Exception:
+        return []
+
+def log_production():
+    log = get_production_log()
+    log.append(datetime.now(timezone.utc).isoformat())
+    PRODUCTION_LOG.write_text(json.dumps(log))
+
+def productions_this_week():
+    log = get_production_log()
+    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    return sum(1 for ts in log if datetime.fromisoformat(ts) > week_ago)
+
+# ---------------------------------------------------------------------------
+# EDITORIAL PROMPT
+# ---------------------------------------------------------------------------
+
+EDITORIAL_PROMPT = """You are an executive editorial strategist and systems thinker.
+Propose high-leverage editorial topics for a senior analytics and AI executive.
+
+CONTEXT:
+- Former VP Advanced Analytics at Diageo North America (global CPG)
+- Chief Analytics Officer at Overproof (beverage alcohol market intelligence, B Corp)
+- Building multi-agent AI systems: governance, deterministic workflows, ROI measurement
+- Enterprise AI deals with Heineken, Beam Suntory, Diageo
+- Active C-suite job seeker (CAO / CDO / VP Analytics)
+- Thinks in systems, incentives, capital allocation, and moats
+
+CONSTRAINTS:
+- No generic "AI is transforming everything" topics
+- No beginner tutorials or LinkedIn listicles
+- Prioritize depth, tension, decision leverage
+- Each topic must feel slightly uncomfortable or contrarian
+- Focus: enterprise AI, governance, economic models, org behavior, beverage alcohol
+
+Generate 12 candidates internally. Return the top 6 ranked by intellectual upside, strategic leverage, and market relevance (next 2-3 years).
+
+Return ONLY a valid JSON array of 6 objects, no markdown:
+[{
+  "rank": 1,
+  "title": "provocative but professional title",
+  "tension": "core contrarian thesis in 1-2 sentences",
+  "why_it_matters": "strategic importance in 1 sentence",
+  "common_mistake": "what sophisticated leaders get wrong in 1-2 sentences",
+  "sub_questions": ["question 1", "question 2", "question 3"],
+  "trailer_hook": "3-4 sentence spoken-word hook, direct to a peer executive"
+}]"""
+
+FALLBACK_TOPICS = [
+    {"rank":1,"title":"The Governance Tax: Why Most Enterprise AI Programs Are Paying for Risk They've Already Accepted","tension":"Organizations build elaborate AI governance frameworks after already deploying high-risk systems. The governance comes after the exposure, not before it.","why_it_matters":"Misaligned governance timing creates compliance theater that burns budget without reducing actual risk.","common_mistake":"Leaders treat governance as a launch gate rather than a continuous risk calibration process, which means controls are always one deployment behind actual exposure.","sub_questions":["At what point does governance reduce risk versus just document it?","How do you price retroactive governance versus pre-deployment friction?","What incentive structures cause governance teams to prioritize documentation over risk reduction?"],"trailer_hook":"Here's something nobody in your governance steering committee wants to say out loud: most enterprise AI governance programs are retroactive. You've already deployed the models. You've already accepted the risk. The frameworks you're building now are documentation for decisions already made. The real question is whether your governance creates actual risk reduction or just paper trails."},
+    {"rank":2,"title":"Agentic AI Broke Your ROI Model — And Your CFO Doesn't Know It Yet","tension":"Traditional ROI frameworks measure discrete outputs. Agentic AI generates value through non-linear, compounding processes largely invisible to standard measurement.","why_it_matters":"Executives who can't articulate agentic AI ROI in CFO terms will lose the budget war.","common_mistake":"Most analytics leaders retrofit agentic AI value into hours-saved metrics, which systematically undervalues compounding effects and undermines the investment case.","sub_questions":["What's the right unit of measurement for a system that improves its own decision quality over time?","How do you present agentic ROI to a CFO trained on capital budgeting?","What's the opportunity cost of NOT deploying agents while competitors do?"],"trailer_hook":"You cannot measure agentic AI the way you measured your last analytics platform. The value is in the loops — decisions made faster, signals never caught, systems learning at 3am. Your current ROI model was built for batch reporting. If you're still presenting AI value as hours-saved, you're losing the budget argument before it starts."},
+    {"rank":3,"title":"The Data Moat Is Dead — What Replaces It as Strategic Advantage","tension":"For a decade, proprietary data was the defensible edge. Foundation models have commoditized data advantage faster than most executives have internalized.","why_it_matters":"Executives investing in data hoarding instead of workflow integration are building walls around empty vaults.","common_mistake":"Leaders conflate data volume with data advantage, not recognizing scarcity has shifted from data to operational judgment.","sub_questions":["What does a defensible moat look like when foundation models approximate your proprietary knowledge?","How do you communicate the shift from data strategy to workflow strategy to a board that funded the data lake?","Where does first-party behavioral data still create genuine asymmetry?"],"trailer_hook":"The data moat argument used to work. You had the data, competitors didn't, you had the edge. That logic is collapsing. When foundation models synthesize industry knowledge from public sources that rivals your proprietary training data, the moat isn't the data. The moat is the workflow."},
+    {"rank":4,"title":"Beverage Alcohol's Data Silence Problem: Why the Industry Knows Less Than It Should","tension":"Despite massive distribution networks and decades of sell-through data, beverage alcohol remains one of the most information-asymmetric industries in CPG — by design.","why_it_matters":"The next competitive wave belongs to operators who solve the last-mile data problem, not those who spend more on brand.","common_mistake":"Brand teams treat the data gap as a vendor problem when the actual barrier is three-tier incentive misalignment no data provider can fix.","sub_questions":["What would real-time venue-level visibility require in a three-tier system?","Where does menu scraping create actionable intelligence that replaces missing sell-through data?","What's the strategic value of knowing venue penetration before competitors do?"],"trailer_hook":"The beverage alcohol industry sits on a paradox. Trillion-dollar brands. Global distribution. And almost no reliable real-time data on what's happening at venue level. The three-tier system was designed to create information asymmetry. That changes when AI reads menus at scale."},
+    {"rank":5,"title":"Why Your Best Analysts Are Training Their Own Replacements","tension":"High-performing analysts who adopt AI are simultaneously commoditizing their own skills and becoming the most irreplaceable people in the organization.","why_it_matters":"Analytics talent strategy needs a complete rethink as the skill premium shifts from technical execution to system design.","common_mistake":"Analytics leaders protect headcount by resisting AI adoption, creating conditions for their function to be outsourced once leadership runs the math on AI-enabled generalists.","sub_questions":["What's the right ratio of AI-augmented analysts to traditional FTEs?","What skills are you hiring for in 2026 that didn't exist as a category in 2022?","How do you restructure performance management when AI handles most measurable output?"],"trailer_hook":"Your best analyst just used Claude to do in 20 minutes what used to take two weeks. You've repriced their labor market value downward and upward simultaneously. The person who knows how to direct AI toward the right problem is extraordinarily rare. How you respond to that tension will determine whether your analytics function compounds or collapses."},
+    {"rank":6,"title":"The CAO Role Is Disappearing — What Comes Next Is More Powerful and Harder to Fill","tension":"The Chief Analytics Officer title is being absorbed into CAIO, CDO, and CTO roles — but the executive who translates AI capability into business strategy has never been more scarce.","why_it_matters":"Analytics leaders who define themselves by function rather than strategic value will find their seats eliminated in the next org redesign.","common_mistake":"CAOs defend their role by proving team output rather than positioning themselves as the interpreter between AI capability and board-level strategy.","sub_questions":["What's the actual job description of the executive who owns AI strategy in a post-CAO structure?","How do you transition from functional leader to strategic interpreter before the title disappears?","How do you build the board relationship that makes you essential regardless of title?"],"trailer_hook":"The CAO title is getting squeezed from three directions — Chief AI Officers taking the forward mandate, CDOs absorbing governance, CTOs claiming infrastructure. If your value proposition is 'I run the analytics function,' that's a shrinking job. If it's 'I make AI investments legible to the board,' that role has never been more critical or more vacant."}
+]
+
+AR_DASHBOARD_URL = "https://ar-intelligence-dashboard-production.up.railway.app/"
+
+def fetch_ar_intelligence():
+    try:
+        import urllib.request
+        from html.parser import HTMLParser
+        req = urllib.request.Request(AR_DASHBOARD_URL,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; IntelligenceBriefings/1.0)"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+        class TextExtractor(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.text_parts = []
+                self.skip_tags = {"script", "style", "head"}
+                self._skip = 0
+            def handle_starttag(self, tag, attrs):
+                if tag in self.skip_tags: self._skip += 1
+            def handle_endtag(self, tag):
+                if tag in self.skip_tags and self._skip > 0: self._skip -= 1
+            def handle_data(self, data):
+                if self._skip == 0:
+                    s = data.strip()
+                    if s: self.text_parts.append(s)
+        parser = TextExtractor()
+        parser.feed(html)
+        raw = "\n".join(parser.text_parts)
+        sections = {}
+        if "Executive Summary" in raw:
+            s = raw.find("Executive Summary") + len("Executive Summary")
+            e = raw.find("Dominant strategic positions", s)
+            sections["executive_summary"] = raw[s:e].strip()[:800]
+        if "Dominant strategic positions" in raw:
+            s = raw.find("Dominant strategic positions")
+            e = raw.find("Strategic contradictions", s)
+            sections["positions"] = raw[s:e].strip()[:1500]
+        if "Strategic contradictions" in raw:
+            s = raw.find("Strategic contradictions")
+            e = raw.find("Questions that demonstrate", s)
+            sections["tensions"] = raw[s:e].strip()[:1000]
+        return sections
+    except Exception as e:
+        print(f"AR fetch failed: {e}")
+        return {}
+
+def call_anthropic(messages, max_tokens=2500, use_web_search=False):
+    import urllib.request
+    body = {
+        "model": "claude-sonnet-4-20250514",
+        "max_tokens": max_tokens,
+        "messages": messages
+    }
+    if use_web_search:
+        body["tools"] = [{"type": "web_search_20250305", "name": "web_search"}]
+    payload = json.dumps(body).encode()
+    headers = {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+    if use_web_search:
+        headers["anthropic-beta"] = "web-search-2025-03-05"
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=payload,
+        headers=headers
+    )
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        return json.loads(resp.read())
+
+def extract_text(data):
+    return " ".join(b["text"] for b in data.get("content", []) if b.get("type") == "text").strip()
+
+# ---------------------------------------------------------------------------
+# TOPIC GENERATION
+# ---------------------------------------------------------------------------
+
+def get_topics_for_today():
+    today = date.today().isoformat()
+    if TOPICS_CACHE.exists():
+        try:
+            cached = json.loads(TOPICS_CACHE.read_text())
+            if cached.get("date") == today:
+                return cached["topics"]
+        except Exception:
+            pass
+    topics = generate_topics_via_claude()
+    TOPICS_CACHE.write_text(json.dumps({"date": today, "topics": topics}, indent=2))
+    return topics
+
+def generate_topics_via_claude():
+    if not ANTHROPIC_API_KEY:
+        return FALLBACK_TOPICS
+    try:
+        ar_data = fetch_ar_intelligence()
+        prompt = EDITORIAL_PROMPT
+        if ar_data:
+            parts = []
+            for k, v in ar_data.items():
+                parts.append(f"{k.upper()}:\n{v}")
+            prompt += "\n\nLIVE COMPETITIVE INTELLIGENCE (AnswerRocket):\n" + "\n\n".join(parts)
+        data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=2500)
+        text = extract_text(data).strip()
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"): text = text[4:]
+        return json.loads(text)[:6]
+    except Exception as e:
+        print(f"Topic gen failed: {e}")
+        return FALLBACK_TOPICS
+
+# ---------------------------------------------------------------------------
+# CHAT — DISCOVER REFINEMENT
+# ---------------------------------------------------------------------------
+
+CHAT_SYSTEM = """You are an editorial producer for an executive intelligence podcast.
+The listener is a senior analytics and AI executive (former VP at Diageo, CAO at Overproof, 
+building agentic AI systems, C-suite job seeker).
+
+You receive one of two types of input:
+1. "I want to learn about X" — generate a new topic card
+2. A reference to an existing topic + refinement instructions — adjust that topic
+
+In both cases, return a SINGLE topic object as valid JSON (no markdown):
+{
+  "rank": 1,
+  "title": "provocative but professional title",
+  "tension": "core contrarian thesis in 1-2 sentences",
+  "why_it_matters": "strategic importance in 1 sentence",
+  "common_mistake": "what sophisticated leaders get wrong",
+  "sub_questions": ["question 1", "question 2", "question 3"],
+  "trailer_hook": "3-4 sentence spoken-word hook",
+  "production_brief": "2-3 sentences of specific guidance for the script writer on what to emphasize, cover, or avoid"
+}
+
+The production_brief field captures the user's specific refinement intent for use in script generation.
+Tone: sharp, executive, zero fluff. Topics should feel slightly uncomfortable or contrarian."""
+
+def chat_to_topic(user_message, existing_topics=None):
+    context = ""
+    if existing_topics:
+        context = "EXISTING TOPICS FOR REFERENCE:\n"
+        for t in existing_topics:
+            context += f"#{t['rank']}: {t['title']}\n"
+        context += "\n"
+    
+    data = call_anthropic([{
+        "role": "user",
+        "content": context + user_message
+    }], max_tokens=1000)
+    
+    text = extract_text(data).strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"): text = text[4:]
+    return json.loads(text)
+
+# ---------------------------------------------------------------------------
+# SCRIPT GENERATION (GROUNDED)
+# ---------------------------------------------------------------------------
+
+SCRIPT_SYSTEM = """You are a script writer for an executive intelligence podcast.
+Write a two-host dialogue between Alex (analytical, direct) and Morgan (strategic, challenges assumptions).
+
+GROUNDING RULES — CRITICAL:
+- You have web search available. USE IT before writing any script.
+- Search for current data, recent examples, real company names, actual statistics.
+- Only include claims you found in search results or that are well-established facts.
+- Do NOT invent statistics, company names, or specific data points.
+- If you can't verify something, don't say it.
+
+SCRIPT FORMAT:
+Return a JSON array of dialogue segments:
+[{"host": "Alex", "text": "..."}, {"host": "Morgan", "text": "..."}, ...]
+
+TARGET LENGTH based on depth:
+- executive: 6-8 segments (~3 min)
+- standard: 12-16 segments (~8 min)  
+- deep: 20-28 segments (~15 min)
+
+STRUCTURE:
+1. Cold open — state the uncomfortable truth immediately
+2. Ground it — real examples, current data from your search
+3. The tension — what sophisticated leaders get wrong
+4. The so-what — specific decision leverage for the listener
+5. Close — one sentence that reframes how they'll think about this
+
+After the script JSON, on a new line add:
+SOURCES: [comma-separated list of sources/publications you referenced]"""
+
+def generate_grounded_script(topic, depth="standard", production_brief=""):
+    brief_section = f"\nPRODUCTION BRIEF (user's specific focus):\n{production_brief}\n" if production_brief else ""
+    
+    prompt = f"""Write an executive podcast script on this topic:
+
+TITLE: {topic['title']}
+CORE TENSION: {topic['tension']}
+WHAT LEADERS GET WRONG: {topic.get('common_mistake', '')}
+DISCUSSION QUESTIONS TO COVER: {'; '.join(topic.get('sub_questions', []))}
+{brief_section}
+DEPTH: {depth}
+
+Search for current, relevant information before writing. Ground every claim."""
+
+    try:
+        data = call_anthropic([{"role": "user", "content": prompt}],
+                              max_tokens=4000, use_web_search=True)
+        full_text = extract_text(data)
+        
+        # Split script from sources
+        sources = []
+        script_text = full_text
+        if "SOURCES:" in full_text:
+            parts = full_text.rsplit("SOURCES:", 1)
+            script_text = parts[0].strip()
+            sources = [s.strip() for s in parts[1].strip().split(",") if s.strip()]
+        
+        # Parse JSON
+        if "```" in script_text:
+            script_text = script_text.split("```")[1]
+            if script_text.startswith("json"): script_text = script_text[4:]
+        
+        script = json.loads(script_text.strip())
+        return script, sources
+    except Exception as e:
+        print(f"Script generation failed: {e}")
+        # Fallback
+        return [
+            {"host": "Alex", "text": f"Today we're examining: {topic['title']}. {topic['tension']}"},
+            {"host": "Morgan", "text": f"The strategic implication here is significant. {topic['why_it_matters']}"},
+            {"host": "Alex", "text": f"And here's what sophisticated leaders consistently get wrong. {topic.get('common_mistake', '')}"},
+            {"host": "Morgan", "text": "The question every executive should be asking is: what's the decision you need to make differently because of this?"},
+            {"host": "Alex", "text": "That's the briefing. Sit with the tension. We'll see you next time."}
+        ], []
+
+def build_trailer_script(topic):
+    return [
+        {"host": "Alex", "text": topic.get("trailer_hook", topic["tension"])},
+        {"host": "Alex", "text": f"If you want the full deep dive on {topic['title']}, hit Create Episode. I'm Alex."}
+    ], []
+
+# ---------------------------------------------------------------------------
+# AUDIO
+# ---------------------------------------------------------------------------
+
+def get_elevenlabs_client():
+    from elevenlabs import ElevenLabs
+    return ElevenLabs(api_key=ELEVEN_API_KEY)
+
+def resolve_voice(client, name_or_id):
+    resp = client.voices.get_all()
+    for v in resp.voices:
+        if v.name.lower() == name_or_id.lower() or v.voice_id == name_or_id:
+            return v.voice_id
+    for v in resp.voices:
+        if name_or_id.lower() in v.name.lower():
+            return v.voice_id
+    return None
+
+def generate_audio_bytes(client, text, voice_id):
+    return b"".join(client.text_to_speech.convert(
+        voice_id=voice_id, text=text,
+        model_id="eleven_turbo_v2_5", output_format="mp3_44100_128"))
+
+def generate_episode_audio(client, script, ep_dir, voice_a_id, voice_b_id):
+    ep_dir = Path(ep_dir)
+    ep_dir.mkdir(parents=True, exist_ok=True)
+    parts = []
+    for i, seg in enumerate(script):
+        vid = voice_a_id if seg["host"].lower() == "alex" else voice_b_id
+        p = ep_dir / f"seg_{i:02d}.mp3"
+        p.write_bytes(generate_audio_bytes(client, seg["text"], vid))
+        parts.append(p)
+    final = ep_dir / "episode.mp3"
+    silence = b'\xff\xfb\x90\x00' + b'\x00' * 417 * 30
+    with open(final, "wb") as out:
+        for i, f in enumerate(parts):
+            out.write(f.read_bytes())
+            if i < len(parts) - 1:
+                out.write(silence)
+    return final
+
+# ---------------------------------------------------------------------------
+# EPISODES
+# ---------------------------------------------------------------------------
+
+def load_episodes():
+    if not EPISODES_JSON.exists(): return []
+    try: return json.loads(EPISODES_JSON.read_text())
+    except: return []
+
+def save_episode(entry):
+    eps = load_episodes()
+    eps.append(entry)
+    EPISODES_JSON.write_text(json.dumps(eps, indent=2))
+
+# ---------------------------------------------------------------------------
+# ROUTES
+# ---------------------------------------------------------------------------
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/episodes/<path:filename>')
+def serve_episode(filename):
+    return send_from_directory(EPISODES_DIR, filename)
+
+@app.route('/feed.xml')
+def serve_feed():
+    if FEED_FILE.exists():
+        return send_from_directory(DATA_DIR, 'feed.xml', mimetype='application/rss+xml')
+    return "No feed yet", 404
+
+@app.route('/api/voices')
+def api_voices():
+    if not ELEVEN_API_KEY:
+        return jsonify({"error": "No API key", "voices": []})
+    try:
+        client = get_elevenlabs_client()
+        resp = client.voices.get_all()
+        voices = [{"name": v.name, "voice_id": v.voice_id, "category": v.category or "custom"}
+                  for v in resp.voices]
+        return jsonify({"voices": voices})
+    except Exception as e:
+        return jsonify({"error": str(e), "voices": []})
+
+@app.route('/api/episodes')
+def api_episodes():
+    eps = load_episodes()
+    trailers = [e for e in eps if e.get("is_trailer")]
+    full = [e for e in eps if not e.get("is_trailer")]
+    return jsonify({"episodes": eps, "full_count": len(full), "trailer_count": len(trailers)})
+
+@app.route('/api/topics')
+def api_topics():
+    try:
+        topics = get_topics_for_today()
+        week_count = productions_this_week()
+        return jsonify({"topics": topics, "productions_this_week": week_count, "weekly_cap": WEEKLY_CAP})
+    except Exception as e:
+        return jsonify({"error": str(e), "topics": FALLBACK_TOPICS, "productions_this_week": 0, "weekly_cap": WEEKLY_CAP})
+
+@app.route('/api/chat', methods=['POST'])
+def api_chat():
+    """Chat interface: generate or refine topic card, then immediately produce audio."""
+    data = request.json
+    message = data.get("message", "").strip()
+    existing_topics = data.get("existing_topics", [])
+    voice_alex = data.get("voice_alex", "Chris - Charming, Down-to-Earth")
+    voice_morgan = data.get("voice_morgan", "Matilda - Knowledgable, Professional")
+
+    if not message:
+        return jsonify({"success": False, "error": "Message required"})
+    if not ANTHROPIC_API_KEY:
+        return jsonify({"success": False, "error": "Anthropic API key not configured"})
+
+    try:
+        # Step 1: Generate topic from chat
+        topic = chat_to_topic(message, existing_topics)
+        production_brief = topic.get("production_brief", "")
+
+        # Step 2: Generate grounded script
+        script, sources = generate_grounded_script(topic, depth="standard",
+                                                    production_brief=production_brief)
+
+        # Step 3: Produce audio
+        if not ELEVEN_API_KEY:
+            return jsonify({"success": False, "error": "ElevenLabs API key not configured",
+                           "topic": topic})
+
+        client = get_elevenlabs_client()
+        voice_a_id = resolve_voice(client, voice_alex)
+        voice_b_id = resolve_voice(client, voice_morgan)
+        if not voice_a_id or not voice_b_id:
+            return jsonify({"success": False, "error": "Voice not found"})
+
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        ep_id = f"briefing-chat-{timestamp}"
+        ep_dir = EPISODES_DIR / ep_id
+        final_path = generate_episode_audio(client, script, ep_dir, voice_a_id, voice_b_id)
+
+        dest = EPISODES_DIR / f"{ep_id}.mp3"
+        shutil.copy2(final_path, dest)
+        log_production()
+
+        entry = {
+            "id": ep_id,
+            "title": f"[Chat] {topic['title']}",
+            "description": topic["tension"],
+            "file": f"{ep_id}.mp3",
+            "file_size": dest.stat().st_size,
+            "depth": "Standard",
+            "is_trailer": False,
+            "sources": sources,
+            "published": datetime.now(timezone.utc).isoformat(),
+        }
+        save_episode(entry)
+        return jsonify({"success": True, "topic": topic, "episode": entry, "sources": sources})
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route('/api/generate', methods=['POST'])
+def api_generate():
+    data = request.json
+    topic_data = data.get("topic_data")  # full topic object preferred
+    topic_title = data.get("topic", "").strip()
+    depth = data.get("depth", "standard")
+    voice_alex = data.get("voice_alex", "Chris - Charming, Down-to-Earth")
+    voice_morgan = data.get("voice_morgan", "Matilda - Knowledgable, Professional")
+    is_trailer = data.get("trailer", False)
+    production_brief = data.get("production_brief", "")
+
+    if not topic_data and not topic_title:
+        return jsonify({"success": False, "error": "Topic required"})
+    if not ELEVEN_API_KEY:
+        return jsonify({"success": False, "error": "ElevenLabs API key not configured"})
+
+    # Build topic object if only title passed
+    if not topic_data:
+        topic_data = {"title": topic_title, "tension": topic_title,
+                      "why_it_matters": "", "common_mistake": "", "sub_questions": [],
+                      "trailer_hook": data.get("trailer_hook", topic_title)}
+
+    try:
+        client = get_elevenlabs_client()
+        voice_a_id = resolve_voice(client, voice_alex)
+        voice_b_id = resolve_voice(client, voice_morgan)
+        if not voice_a_id or not voice_b_id:
+            return jsonify({"success": False, "error": "Voice not found"})
+
+        if is_trailer:
+            script, sources = build_trailer_script(topic_data)
+        else:
+            script, sources = generate_grounded_script(topic_data, depth, production_brief)
+            log_production()
+
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        ep_type = "trailer" if is_trailer else "episode"
+        ep_id = f"briefing-{ep_type}-{timestamp}"
+        ep_dir = EPISODES_DIR / ep_id
+        final_path = generate_episode_audio(client, script, ep_dir, voice_a_id, voice_b_id)
+
+        dest = EPISODES_DIR / f"{ep_id}.mp3"
+        shutil.copy2(final_path, dest)
+
+        label = "Trailer" if is_trailer else depth.title()
+        entry = {
+            "id": ep_id,
+            "title": f"{'[Trailer] ' if is_trailer else ''}Briefing: {topic_data['title']}",
+            "description": topic_data.get("tension", ""),
+            "file": f"{ep_id}.mp3",
+            "file_size": dest.stat().st_size,
+            "depth": label,
+            "is_trailer": is_trailer,
+            "sources": sources,
+            "published": datetime.now(timezone.utc).isoformat(),
+        }
+        save_episode(entry)
+        return jsonify({"success": True, "episode": entry, "sources": sources})
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)})
+
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port, debug=False)
