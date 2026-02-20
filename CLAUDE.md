@@ -1,10 +1,10 @@
 # Intelligence Briefings — Project Context for Claude
 
 ## What This Is
-An AI-powered executive podcast platform hosted on Railway. It generates 5-10 minute audio briefings on topics relevant to a senior analytics/AI executive (Ed Dobbles, CAO at Overproof). Two AI hosts — Alex and Morgan — debate and analyze topics in a structured dialogue format. Episodes are published as an RSS feed consumable by Apple Podcasts or any podcast app.
+An AI-powered executive podcast platform hosted on Railway. It generates 5-10 minute audio briefings on topics relevant to a senior analytics/AI executive (Ed Dobbles, CAO at Overproof). Two AI hosts — Alex ("The Empiricist") and Morgan ("The Strategist") — debate and analyze topics in a structured dialogue format with distinct rhetorical identities. Episodes are published as an RSS feed consumable by Apple Podcasts or any podcast app.
 
-**Production URL:** https://intelligence-briefings-production.up.railway.app  
-**Local project path:** `C:\Users\eddob\Claude Projects\podcast-console\`  
+**Production URL:** https://intelligence-briefings-production.up.railway.app
+**Local project path:** `C:\Users\eddob\Claude Projects\podcast-console\`
 **Railway project ID:** 8d9b2720-162c-45a4-a209-1af24d88583e
 
 ---
@@ -12,7 +12,9 @@ An AI-powered executive podcast platform hosted on Railway. It generates 5-10 mi
 ## Stack
 - **Backend:** Python / Flask, deployed on Railway with gunicorn
 - **TTS:** ElevenLabs (eleven_turbo_v2_5, mp3_44100_128)
-- **Script generation:** Anthropic Claude API (claude-sonnet-4-20250514)
+- **Script generation:** Anthropic Claude API — **dual-model architecture:**
+  - `SCRIPT_MODEL` = `claude-opus-4-20250514` — used for script generation and series outlines (premium quality)
+  - `EDITORIAL_MODEL` = `claude-sonnet-4-20250514` — used for topic generation, chat-to-topic, suggestions (cost-effective)
 - **Data persistence:** Railway volume mounted at `~/Intelligence-Briefings/`
 - **Frontend:** Single-page HTML/CSS/JS in `templates/index.html`
 - **Process manager:** `Procfile` with gunicorn gthread workers, 300s timeout
@@ -58,17 +60,42 @@ Railway has a 60-second HTTP proxy timeout. All generation tasks (2-4 minutes) r
 
 ## Episode Generation Pipeline
 
-1. `generate_grounded_script(topic, depth)` → calls Claude API → returns JSON array of `{host, text}` segments
+1. `generate_grounded_script(topic, depth)` → calls Claude Opus API (with web search fallback) → returns JSON array of `{host, text}` segments
 2. `generate_episode_audio(client, script, ep_dir, voice_a_id, voice_b_id)` → calls ElevenLabs per segment → concatenates MP3s
 3. Episode saved to `episodes.json`, RSS feed rebuilt automatically
 
 **Segment targets (strictly enforced in prompt):**
 - executive: minimum 10 segments
-- standard: minimum 16 segments  
+- standard: minimum 16 segments
 - deep: minimum 24 segments
 - Each segment: 3-5 substantial sentences
 
-**Web search:** Currently disabled (`use_web_search=False`) for reliability. Can re-enable once confirmed working — requires `anthropic-beta: web-search-2025-03-05` header.
+**Web search:** Enabled with graceful fallback. Scripts attempt `use_web_search=True` first; if it fails (permissions, quota), falls back to Claude's training knowledge silently. Requires `anthropic-beta: web-search-2025-03-05` header (handled automatically in `call_anthropic`).
+
+**Script structure (7 sections):**
+1. COLD OPEN — Drop into tension immediately
+2. GROUND IT — Named examples with natural source attribution
+3. THE MECHANISM — Structural forces and incentive misalignments
+4. THE REAL MISTAKE — Counterintuitive errors smart leaders make (hosts disagree here)
+5. THE LEVER — Specific Monday-morning moves
+6. THE MONDAY MORNING — Required actionable closer ("the email you should send Monday is...")
+7. THE REFRAME — One idea that permanently changes how they see the topic
+
+---
+
+## Host Personalities
+
+**Alex — "The Empiricist"**
+- Evidence-first. Leads with data, derives implications. Quantifies what others leave vague. Catches when narrative contradicts data.
+- Signature: "Here's what the data actually shows...", "The pattern that keeps recurring is..."
+- Weakness Morgan exploits: "spreadsheet blindness" — over-indexes on measurable outcomes, misses political dynamics.
+
+**Morgan — "The Strategist"**
+- Decisions-first. Follows incentives, names the unsaid thing, connects unrelated dynamics. Uses analogies and pointed stories.
+- Signature: "Follow the incentives...", "Who benefits from this being true?", "I sat in a board room where..."
+- Weakness Alex exploits: "strategy without a denominator" — narrative elegance without specified mechanism.
+
+**Dynamic:** At least 2 genuine disagreements per episode. Not performative — real intellectual friction with partial concessions.
 
 ---
 
@@ -86,7 +113,7 @@ Railway has a 60-second HTTP proxy timeout. All generation tasks (2-4 minutes) r
 ### Series Tab
 - Create a multi-episode progressive arc (3, 6, 9, or 12 episodes)
 - Input: topic card, free-text description, or article URL
-- `generate_series_outline()` → Claude generates N-episode arc with episode titles/tensions
+- `generate_series_outline()` → Claude Opus generates N-episode arc with episode titles/tensions
 - Episodes produced sequentially in background thread
 - Live progress tracking per episode in UI
 - Series episodes tagged in Episodes tab
@@ -136,9 +163,22 @@ DATA_DIR=                       # optional, defaults to ~/Intelligence-Briefings
 
 ---
 
+## Cost Model (Dual-Model Architecture)
+
+**Opus (scripts + series outlines):** ~$0.30–0.35 per script call (~2K input, ~3.5K output tokens)
+**Sonnet (topics, suggestions, chat):** ~$0.06 per call
+
+At weekly cap of 50 episodes: ~$17/week Anthropic API (up from ~$3/week all-Sonnet).
+Realistic usage (15-20 episodes/week): ~$5-7/week Anthropic API.
+ElevenLabs remains the dominant cost driver.
+
+To downgrade scripts back to Sonnet: change `SCRIPT_MODEL` constant in `app.py`.
+
+---
+
 ## Known Issues / Next Priorities
 
-1. **Web search disabled** — `use_web_search=False` in `generate_grounded_script()`. Episodes use Claude's training knowledge only. To re-enable: set `use_web_search=True` and verify Anthropic account has web search beta access.
+1. **Web search depends on account permissions** — scripts attempt web search with graceful fallback. If Anthropic account lacks web search beta access, scripts silently use training knowledge only. Verify with `GET /api/test/web-search`.
 
 2. **Series tested in code but not yet production-verified** — first end-to-end series run pending after this deploy.
 
@@ -146,7 +186,7 @@ DATA_DIR=                       # optional, defaults to ~/Intelligence-Briefings
 
 4. **Weekly cap set to 50** — raised from original 5 to accommodate series production volume.
 
-5. **No episode deletion UI** — episodes accumulate. Manual cleanup requires editing `episodes.json` on Railway volume.
+5. **Opus generation time** — script generation takes ~3-4 minutes with Opus (vs ~2 minutes Sonnet). Well within Railway's 300s gunicorn timeout and the async job queue handles it, but user-facing wait is longer.
 
 ---
 

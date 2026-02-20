@@ -278,10 +278,13 @@ def fetch_ar_intelligence():
         print(f"AR fetch failed: {e}")
         return {}
 
-def call_anthropic(messages, max_tokens=2500, use_web_search=False):
+SCRIPT_MODEL = "claude-opus-4-20250514"      # premium: scripts, series outlines
+EDITORIAL_MODEL = "claude-sonnet-4-20250514"  # cost-effective: topics, chat-to-topic, suggestions
+
+def call_anthropic(messages, max_tokens=2500, use_web_search=False, model=None):
     import urllib.request
     body = {
-        "model": "claude-sonnet-4-20250514",
+        "model": model or EDITORIAL_MODEL,
         "max_tokens": max_tokens,
         "messages": messages
     }
@@ -437,13 +440,13 @@ Return ONLY a valid JSON array of {num_episodes} topic objects, no markdown:
 }}]"""
 
     try:
-        data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=4000)
+        data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=4000, model=SCRIPT_MODEL)
         text = extract_text(data).strip()
         if text.startswith("```"):
             text = text.split("```")[1]
             if text.startswith("json"): text = text[4:]
         episodes = json.loads(text)
-        print(f"[SERIES] Generated {len(episodes)}-episode arc")
+        print(f"[SERIES] Generated {len(episodes)}-episode arc (Opus)")
         return episodes
     except Exception as e:
         print(f"[SERIES] Outline generation failed: {e}")
@@ -561,14 +564,24 @@ def generate_grounded_script(topic, depth="standard", production_brief=""):
 
     prompt = f"""You are writing a premium executive intelligence podcast script. This is NOT generic business content.
 
-HOST PROFILES (stay in character - they are colleagues who push each other):
-- ALEX: Former VP Advanced Analytics at a Fortune 100 CPG. Evidence-first thinker. Speaks in data, patterns, and structural causes. Gets impatient with hand-waving. Comfortable saying "the numbers don't support that." Direct without being abrasive.
-- MORGAN: Former strategy consultant turned operator. Thinks in decisions, consequences, and capital. Asks "who benefits from this belief?" Challenges comfortable consensus. Often the one who names the thing everyone is thinking but not saying.
+HOST PROFILES — these two have DISTINCT rhetorical identities. Never make them interchangeable.
 
-They have genuine intellectual disagreements. At least once per episode, Morgan should push back on something Alex says (or vice versa) with a real counter - not just "yes, and." Their dynamic makes the listener lean forward.
+ALEX — The Empiricist
+- Former VP Advanced Analytics at a Fortune 100 CPG. Evidence-first. Speaks in data, patterns, and structural causes.
+- RHETORICAL STYLE: Leads with evidence, then derives the implication. Uses phrases like "Here's what the data actually shows..." and "The pattern that keeps recurring is..." Comfortable saying "the numbers don't support that." Will cite specific metrics, percentages, and timelines.
+- SIGNATURE MOVES: Quantifies things others leave vague. Spots the base rate that everyone ignores. Catches when a narrative contradicts the data. Sometimes pauses mid-thought to correct himself — "Actually, let me restate that more precisely."
+- WEAKNESS (that Morgan exploits): Can over-index on measurable outcomes and miss the political or human dynamics that drive decisions. Morgan calls this "spreadsheet blindness."
+
+MORGAN — The Strategist
+- Former strategy consultant turned operator. Thinks in decisions, consequences, power, and capital.
+- RHETORICAL STYLE: Leads with the decision or the stakeholder, then works backward to the evidence. Uses phrases like "Follow the incentives..." and "The question nobody in that room is asking is..." and "Who benefits from this being true?" Speaks in analogies and second-order effects.
+- SIGNATURE MOVES: Reframes the entire question. Names the thing everyone is thinking but not saying. Connects seemingly unrelated dynamics. Occasionally tells a brief, pointed story from consulting days — "I sat in a board room where..."
+- WEAKNESS (that Alex exploits): Can over-rotate on narrative elegance and under-specify the mechanism. Alex calls this "strategy without a denominator."
+
+DYNAMIC: They genuinely respect each other but DISAGREE at least twice per episode. Not performative — real intellectual friction. One pushes back with "That's a clean story, but..." or "You're describing what happened, not why it keeps happening." They sometimes concede. The listener should feel like they're overhearing the smartest conversation at the executive offsite.
 
 LISTENER PROFILE:
-C-suite executive in analytics, AI, or data. Has 20+ years of experience. Reads Stratechery and The Economist, not TechCrunch. Is skeptical of AI hype but knows it's real. Works at the intersection of enterprise technology and business strategy. Specific context: beverage-alcohol industry, enterprise CPG, or analytics-led organizations.
+C-suite executive in analytics, AI, or data. 20+ years experience. Reads Stratechery and The Economist, not TechCrunch. Skeptical of AI hype but knows it's real. Enterprise technology meets business strategy. Context: beverage-alcohol, enterprise CPG, analytics-led organizations.
 
 TOPIC: {topic['title']}
 CORE TENSION: {topic['tension']}
@@ -577,22 +590,23 @@ KEY QUESTIONS: {'; '.join(topic.get('sub_questions', []))}
 WHY IT MATTERS: {topic.get('why_it_matters', '')}
 {brief_section}
 
-CONTENT STANDARDS (every episode must hit all of these):
-- Name at least 2 specific companies, executives, or real situations as examples (not "a major CPG brand")
-- Include at least one piece of specific data, a statistic, or a concrete number
-- At least one moment where the hosts genuinely disagree and argue it out before resolving
-- The close must leave the listener with ONE specific question to ask in their next leadership meeting
-- Vary sentence rhythm - mix short punchy statements with longer analytical ones
-- No filler phrases: "at the end of the day", "it's important to note", "in today's landscape", "let's dive in"
-- Spoken-word only - no bullet points, no headers, no lists. Pure dialogue.
+CONTENT STANDARDS (every episode must hit ALL):
+- Name at least 3 specific companies, executives, or real situations (not "a major CPG brand")
+- Include at least 2 specific data points, statistics, or concrete numbers
+- When citing information, NATURALLY ATTRIBUTE it in dialogue: "According to Gartner's latest...", "The McKinsey study from last quarter showed...", "If you look at Diageo's latest earnings call...", "Forrester's research on this puts it at..." — make the sourcing feel like how executives actually talk, not like footnotes
+- At least TWO moments where the hosts genuinely disagree and argue before one (partially) concedes
+- Vary sentence rhythm — mix short punchy statements with longer analytical ones
+- No filler: "at the end of the day", "it's important to note", "in today's landscape", "let's dive in", "great point"
+- Spoken-word only — no bullet points, no headers, no lists. Pure dialogue.
 
 STRUCTURE (each section gets {max(2, seg_min//6)}-{max(3, seg_min//4)} segments):
-1. COLD OPEN - Drop into the tension immediately. No throat-clearing. State something that makes the listener stop what they're doing.
-2. GROUND IT - Concrete, named examples of what is actually happening right now. Specific companies, specific decisions, specific outcomes.
-3. THE MECHANISM - Not what is happening, but WHY. The structural force, the incentive misalignment, the thing that makes this pattern repeat.
-4. THE REAL MISTAKE - The specific error that smart, experienced leaders make. The more counterintuitive the better.
-5. THE LEVER - What changes outcomes. One or two specific moves, not a framework. What would you actually do differently Monday morning?
-6. THE REFRAME - Close with one idea that permanently changes how they see this topic. Not a summary. A new lens.
+1. COLD OPEN — Drop into the tension immediately. No throat-clearing. State something that makes the listener stop what they're doing.
+2. GROUND IT — Concrete, named examples of what is actually happening right now. Specific companies, specific decisions, specific outcomes. Attribute your sources naturally.
+3. THE MECHANISM — Not what is happening, but WHY. The structural force, the incentive misalignment, the thing that makes this pattern repeat.
+4. THE REAL MISTAKE — The specific error that smart, experienced leaders make. The more counterintuitive the better. This is where the hosts should disagree most sharply.
+5. THE LEVER — What changes outcomes. One or two specific moves, not a framework. What would you actually do differently Monday morning?
+6. THE MONDAY MORNING — REQUIRED closer. Morgan or Alex directly addresses the listener: "Here's the one question to bring to your next leadership meeting..." or "The email you should send Monday is..." or "The budget line item you should challenge this quarter is..." Be SPECIFIC and ACTIONABLE. Not a summary — a concrete next move.
+7. THE REFRAME — Final 1-2 segments. One idea that permanently changes how they see this topic. Not a recap. A new lens. End on a line that lingers.
 
 MINIMUM: {seg_min} segments total. Count before returning. Add more if under.
 Each segment: 3-5 substantial spoken sentences. No one-liners.
@@ -606,12 +620,12 @@ SOURCES: source1, source2, source3"""
     try:
         try:
             data = call_anthropic([{"role": "user", "content": prompt}],
-                                  max_tokens=4000, use_web_search=True)
-            print("[SCRIPT] Web search enabled")
+                                  max_tokens=4000, use_web_search=True, model=SCRIPT_MODEL)
+            print("[SCRIPT] Web search enabled, using Opus")
         except Exception as ws_err:
             print(f"[SCRIPT] Web search failed ({ws_err}), falling back to no-search")
             data = call_anthropic([{"role": "user", "content": prompt}],
-                                  max_tokens=4000, use_web_search=False)
+                                  max_tokens=4000, use_web_search=False, model=SCRIPT_MODEL)
         full_text = extract_text(data)
 
         sources = []
@@ -648,8 +662,9 @@ SOURCES: source1, source2, source3"""
             {"host": "Morgan", "text": f"And the second: {sq[1] if len(sq) > 1 else 'What would you do differently if you knew your current approach had a 24-month shelf life?'} Because the executives who are three moves ahead on this aren't smarter - they just asked that question earlier."},
             {"host": "Alex", "text": f"If there's a third lever worth examining: {sq[2] if len(sq) > 2 else 'How are you measuring whether your governance and your actual exposure are in sync?'} The answer tells you more about your real risk posture than any framework document."},
             {"host": "Morgan", "text": "Here's the practical implication. The next time this comes up - whether it's a board review, a budget cycle, or a talent discussion - the question isn't 'are we doing enough.' The question is 'are we working on the right thing.' Those are very different questions with very different answers."},
-            {"host": "Alex", "text": "The executives who navigate this well aren't the ones with the best data or the biggest teams. They're the ones who identified where their mental model was wrong and updated it before the market forced them to. That's the actual competitive advantage here."},
-            {"host": "Morgan", "text": f"Leave you with this reframe: {title} isn't a problem to solve. It's a condition to position around. The organizations that treat it as solvable will spend the next three years in reactive mode. The ones that treat it as structural reality will spend that same time building asymmetric advantage. That's the briefing."}
+            {"host": "Alex", "text": "So here's your Monday morning move. Before your next leadership meeting, ask one question: where in our current approach are we optimizing for the appearance of progress rather than the underlying condition? Write down the answer. If it makes you uncomfortable, you've found the real work."},
+            {"host": "Morgan", "text": "The executives who navigate this well aren't the ones with the best data or the biggest teams. They're the ones who identified where their mental model was wrong and updated it before the market forced them to. That's the actual competitive advantage here."},
+            {"host": "Alex", "text": f"Leave you with this reframe: {title} isn't a problem to solve. It's a condition to position around. The organizations that treat it as solvable will spend the next three years in reactive mode. The ones that treat it as structural reality will spend that same time building asymmetric advantage. That's the briefing."}
         ], []
 
 def build_trailer_script(topic):
