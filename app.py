@@ -100,6 +100,27 @@ for d in [DATA_DIR, EPISODES_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------
+# ★ CHANGE 1: TTS ENGINE CONFIG — v3 Text to Dialogue API
+# ---------------------------------------------------------------------------
+# "v3_dialogue" = ElevenLabs v3 Text to Dialogue API (premium conversational quality)
+# "v2_segment"  = ElevenLabs Turbo v2.5 per-segment (legacy fallback)
+TTS_MODE = os.environ.get("TTS_MODE", "v3_dialogue")
+V3_CHAR_LIMIT = 4800   # v3 API cap is 5000 chars; leave headroom
+
+# ★ CHANGE 4: Recommended v3 voice pairs for audition
+V3_VOICE_PAIRS = [
+    {"alex": "Chris - Charming, Down-to-Earth", "morgan": "Matilda - Knowledgable, Professional",
+     "notes": "Current production pair — re-audition on v3 engine"},
+    {"alex": "Daniel - Authoritative, Deep", "morgan": "Charlotte - Warm, Confident",
+     "notes": "Strong male authority + warm female strategist"},
+    {"alex": "George - Warm, Confident", "morgan": "Lily - Warm, Soft",
+     "notes": "Balanced warmth, good for deep-dive episodes"},
+    {"alex": "Adam - Deep, Clear", "morgan": "Rachel - Calm, Articulate",
+     "notes": "Classic podcast pairing, very clean delivery"},
+]
+
+
+# ---------------------------------------------------------------------------
 # JOB QUEUE
 # ---------------------------------------------------------------------------
 
@@ -189,6 +210,7 @@ def productions_this_week():
     week_ago = datetime.now(timezone.utc) - timedelta(days=7)
     return sum(1 for ts in log if datetime.fromisoformat(ts) > week_ago)
 
+
 # ---------------------------------------------------------------------------
 # EDITORIAL PROMPT
 # ---------------------------------------------------------------------------
@@ -232,6 +254,7 @@ FALLBACK_TOPICS = [
     {"rank":5,"title":"Why Your Best Analysts Are Training Their Own Replacements","tension":"High-performing analysts who adopt AI are simultaneously commoditizing their own skills and becoming the most irreplaceable people in the organization.","why_it_matters":"Analytics talent strategy needs a complete rethink as the skill premium shifts from technical execution to system design.","common_mistake":"Analytics leaders protect headcount by resisting AI adoption, creating conditions for their function to be outsourced once leadership runs the math on AI-enabled generalists.","sub_questions":["What's the right ratio of AI-augmented analysts to traditional FTEs?","What skills are you hiring for in 2026 that didn't exist as a category in 2022?","How do you restructure performance management when AI handles most measurable output?"],"trailer_hook":"Your best analyst just used Claude to do in 20 minutes what used to take two weeks. You've repriced their labor market value downward and upward simultaneously. The person who knows how to direct AI toward the right problem is extraordinarily rare. How you respond to that tension will determine whether your analytics function compounds or collapses."},
     {"rank":6,"title":"The CAO Role Is Disappearing - What Comes Next Is More Powerful and Harder to Fill","tension":"The Chief Analytics Officer title is being absorbed into CAIO, CDO, and CTO roles - but the executive who translates AI capability into business strategy has never been more scarce.","why_it_matters":"Analytics leaders who define themselves by function rather than strategic value will find their seats eliminated in the next org redesign.","common_mistake":"CAOs defend their role by proving team output rather than positioning themselves as the interpreter between AI capability and board-level strategy.","sub_questions":["What's the actual job description of the executive who owns AI strategy in a post-CAO structure?","How do you transition from functional leader to strategic interpreter before the title disappears?","How do you build the board relationship that makes you essential regardless of title?"],"trailer_hook":"The CAO title is getting squeezed from three directions - Chief AI Officers taking the forward mandate, CDOs absorbing governance, CTOs claiming infrastructure. If your value proposition is 'I run the analytics function,' that's a shrinking job. If it's 'I make AI investments legible to the board,' that role has never been more critical or more vacant."}
 ]
+
 
 AR_DASHBOARD_URL = "https://ar-intelligence-dashboard-production.up.railway.app/"
 
@@ -396,6 +419,7 @@ Return a SINGLE topic as valid JSON (no markdown):
         print(f"[AUTOQUEUE] Failed: {e}")
         return None
 
+
 # ---------------------------------------------------------------------------
 # SERIES GENERATION
 # ---------------------------------------------------------------------------
@@ -553,8 +577,9 @@ Tone: sharp, executive, zero fluff."""
         if text.startswith("json"): text = text[4:]
     return json.loads(text)
 
+
 # ---------------------------------------------------------------------------
-# SCRIPT GENERATION
+# ★ CHANGE 3: SCRIPT GENERATION — Audio Tags + Number Normalization for v3
 # ---------------------------------------------------------------------------
 
 def generate_grounded_script(topic, depth="standard", production_brief=""):
@@ -590,9 +615,31 @@ KEY QUESTIONS: {'; '.join(topic.get('sub_questions', []))}
 WHY IT MATTERS: {topic.get('why_it_matters', '')}
 {brief_section}
 
+AUDIO DELIVERY TAGS (v3 TTS — REQUIRED):
+The TTS engine supports expressive audio tags. You MUST embed these in the "text" field to control vocal delivery.
+Available tags: [thoughtful] [emphatic] [skeptical] [surprised] [measured] [wry] [leaning in] [conceding] [jumping in] [sigh] [pause]
+
+Rules for audio tags:
+- Every segment MUST have at least ONE audio tag
+- Place tags INLINE where the vocal shift should happen
+- Segments with disagreement should have 2-3 tags
+- Use [pause] for dramatic beats, NOT between every sentence
+- Use [jumping in] when a host interrupts or builds on the other's point
+- Use [conceding] when a host acknowledges the other has a point
+Example: {{"host": "Alex", "text": "[thoughtful] Here's what the data actually shows... [emphatic] and that is not a coincidence."}}
+
+TEXT NORMALIZATION RULES (MANDATORY — the TTS engine reads text literally):
+1. Write out ALL numbers as words: "forty-seven percent" not "47%", "two point four billion dollars" not "$2.4B"
+2. Write out acronyms on first use: "year over year" not "YoY", "return on investment" not "ROI", "artificial intelligence" not "AI" (after first use, common acronyms like AI are fine spoken naturally)
+3. Write out symbols: "versus" not "vs.", "percent" not "%", "dollar" not "$", "and" not "&"
+4. Spell out abbreviations: "quarter three" not "Q3", "fiscal year twenty-six" not "FY26"
+5. Brand names written phonetically if unusual
+6. NO parenthetical asides — everything must be speakable aloud
+7. Use "around" or "roughly" instead of "~", spell out "number" instead of "#"
+
 CONTENT STANDARDS (every episode must hit ALL):
 - Name at least 3 specific companies, executives, or real situations (not "a major CPG brand")
-- Include at least 2 specific data points, statistics, or concrete numbers
+- Include at least 2 specific data points, statistics, or concrete numbers (written out as words per normalization rules)
 - When citing information, NATURALLY ATTRIBUTE it in dialogue: "According to Gartner's latest...", "The McKinsey study from last quarter showed...", "If you look at Diageo's latest earnings call...", "Forrester's research on this puts it at..." — make the sourcing feel like how executives actually talk, not like footnotes
 - At least TWO moments where the hosts genuinely disagree and argue before one (partially) concedes
 - Vary sentence rhythm — mix short punchy statements with longer analytical ones
@@ -612,7 +659,7 @@ MINIMUM: {seg_min} segments total. Count before returning. Add more if under.
 Each segment: 3-5 substantial spoken sentences. No one-liners.
 
 Return ONLY a valid JSON array, no markdown, no preamble:
-[{{"host": "Alex", "text": "..."}}, {{"host": "Morgan", "text": "..."}}, ...]
+[{{"host": "Alex", "text": "[thoughtful] Here's what the data actually shows..."}}, {{"host": "Morgan", "text": "[leaning in] Follow the incentives..."}}, ...]
 
 After the JSON array, on a new line:
 SOURCES: source1, source2, source3"""
@@ -652,26 +699,27 @@ SOURCES: source1, source2, source3"""
         matters = topic.get('why_it_matters', 'This has direct implications for how you allocate capital and talent.')
         mistake = topic.get('common_mistake', 'They optimize for visibility over actual impact, which means the real exposure never gets addressed.')
         return [
-            {"host": "Alex", "text": f"Let's start with something most executives in this space already know but haven't fully acted on. {title}. The question isn't whether this is real - it's whether you're positioned correctly when it hits your organization."},
-            {"host": "Morgan", "text": f"And the core tension is this: {tension} That's the uncomfortable part. Because it means the conventional playbook - the one that got most leaders to where they are - may actually be the wrong tool for what's coming."},
-            {"host": "Alex", "text": f"Here's why this matters at the strategic level right now. {matters} And the window to get ahead of this is shorter than most leadership teams have internalized."},
-            {"host": "Morgan", "text": "Let's ground this in what's actually happening. The organizations that are navigating this well aren't the ones with the biggest budgets or the most sophisticated tech stacks. They're the ones that identified the structural cause early and built around it rather than against it."},
-            {"host": "Alex", "text": "The structural cause is key. Most conversations about this topic focus on symptoms - the visible friction, the metrics that are off, the talent gaps. But the mechanism underneath is an incentive misalignment that organizations keep papering over with process instead of fixing at the root."},
-            {"host": "Morgan", "text": f"Which brings us to what sophisticated leaders consistently get wrong. {mistake} And the irony is that the leaders who are most experienced - who've solved hard problems before - are often the most prone to this mistake because their pattern recognition is calibrated to a different era."},
-            {"host": "Alex", "text": f"The first question worth sitting with: {sq[0] if sq else 'Where in your current approach are you optimizing for the appearance of progress rather than the underlying condition?'} That's not a rhetorical question. It has a specific answer in your organization right now."},
-            {"host": "Morgan", "text": f"And the second: {sq[1] if len(sq) > 1 else 'What would you do differently if you knew your current approach had a 24-month shelf life?'} Because the executives who are three moves ahead on this aren't smarter - they just asked that question earlier."},
-            {"host": "Alex", "text": f"If there's a third lever worth examining: {sq[2] if len(sq) > 2 else 'How are you measuring whether your governance and your actual exposure are in sync?'} The answer tells you more about your real risk posture than any framework document."},
-            {"host": "Morgan", "text": "Here's the practical implication. The next time this comes up - whether it's a board review, a budget cycle, or a talent discussion - the question isn't 'are we doing enough.' The question is 'are we working on the right thing.' Those are very different questions with very different answers."},
-            {"host": "Alex", "text": "So here's your Monday morning move. Before your next leadership meeting, ask one question: where in our current approach are we optimizing for the appearance of progress rather than the underlying condition? Write down the answer. If it makes you uncomfortable, you've found the real work."},
-            {"host": "Morgan", "text": "The executives who navigate this well aren't the ones with the best data or the biggest teams. They're the ones who identified where their mental model was wrong and updated it before the market forced them to. That's the actual competitive advantage here."},
-            {"host": "Alex", "text": f"Leave you with this reframe: {title} isn't a problem to solve. It's a condition to position around. The organizations that treat it as solvable will spend the next three years in reactive mode. The ones that treat it as structural reality will spend that same time building asymmetric advantage. That's the briefing."}
+            {"host": "Alex", "text": f"[measured] Let's start with something most executives in this space already know but haven't fully acted on. {title}. [emphatic] The question isn't whether this is real. It's whether you're positioned correctly when it hits your organization."},
+            {"host": "Morgan", "text": f"[leaning in] And the core tension is this: {tension} [thoughtful] That's the uncomfortable part. Because it means the conventional playbook, the one that got most leaders to where they are, may actually be the wrong tool for what's coming."},
+            {"host": "Alex", "text": f"[emphatic] Here's why this matters at the strategic level right now. {matters} And the window to get ahead of this is shorter than most leadership teams have internalized."},
+            {"host": "Morgan", "text": "[thoughtful] Let's ground this in what's actually happening. The organizations that are navigating this well aren't the ones with the biggest budgets or the most sophisticated tech stacks. They're the ones that identified the structural cause early and built around it rather than against it."},
+            {"host": "Alex", "text": "[measured] The structural cause is key. Most conversations about this topic focus on symptoms, the visible friction, the metrics that are off, the talent gaps. [emphatic] But the mechanism underneath is an incentive misalignment that organizations keep papering over with process instead of fixing at the root."},
+            {"host": "Morgan", "text": f"[skeptical] Which brings us to what sophisticated leaders consistently get wrong. {mistake} [wry] And the irony is that the leaders who are most experienced, who've solved hard problems before, are often the most prone to this mistake because their pattern recognition is calibrated to a different era."},
+            {"host": "Alex", "text": f"[thoughtful] The first question worth sitting with: {sq[0] if sq else 'Where in your current approach are you optimizing for the appearance of progress rather than the underlying condition?'} [pause] That's not a rhetorical question. It has a specific answer in your organization right now."},
+            {"host": "Morgan", "text": f"[leaning in] And the second: {sq[1] if len(sq) > 1 else 'What would you do differently if you knew your current approach had a twenty-four month shelf life?'} Because the executives who are three moves ahead on this aren't smarter. They just asked that question earlier."},
+            {"host": "Alex", "text": f"[measured] If there's a third lever worth examining: {sq[2] if len(sq) > 2 else 'How are you measuring whether your governance and your actual exposure are in sync?'} The answer tells you more about your real risk posture than any framework document."},
+            {"host": "Morgan", "text": "[emphatic] Here's the practical implication. The next time this comes up, whether it's a board review, a budget cycle, or a talent discussion, the question isn't are we doing enough. [pause] The question is are we working on the right thing. Those are very different questions with very different answers."},
+            {"host": "Alex", "text": "[leaning in] So here's your Monday morning move. Before your next leadership meeting, ask one question: where in our current approach are we optimizing for the appearance of progress rather than the underlying condition? [pause] Write down the answer. If it makes you uncomfortable, you've found the real work."},
+            {"host": "Morgan", "text": "[thoughtful] The executives who navigate this well aren't the ones with the best data or the biggest teams. They're the ones who identified where their mental model was wrong and updated it before the market forced them to. [emphatic] That's the actual competitive advantage here."},
+            {"host": "Alex", "text": f"[measured] Leave you with this reframe: {title} isn't a problem to solve. It's a condition to position around. [emphatic] The organizations that treat it as solvable will spend the next three years in reactive mode. The ones that treat it as structural reality will spend that same time building asymmetric advantage. [pause] That's the briefing."}
         ], []
 
 def build_trailer_script(topic):
     return [
-        {"host": "Alex", "text": topic.get("trailer_hook", topic["tension"])},
-        {"host": "Alex", "text": f"For the full briefing on {topic['title']}, hit Generate Briefing. I'm Alex."}
+        {"host": "Alex", "text": "[leaning in] " + topic.get("trailer_hook", topic["tension"])},
+        {"host": "Alex", "text": f"[measured] For the full briefing on {topic['title']}, hit Generate Briefing. I'm Alex."}
     ], []
+
 
 # ---------------------------------------------------------------------------
 # RSS FEED
@@ -732,8 +780,9 @@ def build_feed():
     FEED_FILE.write_text(feed_xml, encoding="utf-8")
     print(f"[FEED] Rebuilt: {len(feed_eps)} episodes")
 
+
 # ---------------------------------------------------------------------------
-# AUDIO
+# AUDIO — ★ CHANGES 1 & 2: v3 Dialogue API + Batched Generation
 # ---------------------------------------------------------------------------
 
 def get_elevenlabs_client():
@@ -750,25 +799,140 @@ def resolve_voice(client, name_or_id):
             return v.voice_id
     return None
 
-def generate_audio_bytes(client, text, voice_id):
+
+# --- v2 Legacy (per-segment TTS) ---
+
+def generate_audio_bytes_v2(client, text, voice_id):
+    """Original per-segment TTS using Turbo v2.5"""
     return b"".join(client.text_to_speech.convert(
         voice_id=voice_id, text=text,
         model_id="eleven_turbo_v2_5", output_format="mp3_44100_128"))
 
-def generate_episode_audio(client, script, ep_dir, voice_a_id, voice_b_id):
+def generate_episode_audio_v2(client, script, ep_dir, voice_a_id, voice_b_id):
+    """Original v2 segment-by-segment generation"""
     ep_dir = Path(ep_dir)
     ep_dir.mkdir(parents=True, exist_ok=True)
     parts = []
     for i, seg in enumerate(script):
         vid = voice_a_id if seg["host"].lower() == "alex" else voice_b_id
         p = ep_dir / f"seg_{i:02d}.mp3"
-        p.write_bytes(generate_audio_bytes(client, seg["text"], vid))
+        p.write_bytes(generate_audio_bytes_v2(client, seg["text"], vid))
         parts.append(p)
     final = ep_dir / "episode.mp3"
     with open(final, "wb") as out:
         for f in parts:
             out.write(f.read_bytes())
     return final
+
+
+# --- ★ v3 Dialogue API ---
+
+def _call_dialogue_api(dialogue_turns):
+    """
+    Call ElevenLabs v3 Text to Dialogue API.
+    dialogue_turns: list of {"text": "...", "voice_id": "..."}
+    Returns: raw MP3 audio bytes for the entire dialogue.
+    """
+    import urllib.request
+    body = {
+        "model_id": "eleven_v3",
+        "dialogue": dialogue_turns,
+        "output_format": "mp3_44100_128",
+    }
+    payload = json.dumps(body).encode()
+    req = urllib.request.Request(
+        "https://api.elevenlabs.io/v1/text-to-dialogue",
+        data=payload,
+        headers={
+            "xi-api-key": ELEVEN_API_KEY,
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=180) as resp:
+        return resp.read()
+
+
+def _batch_dialogue(script, voice_a_id, voice_b_id):
+    """
+    Split script into batches that fit under V3_CHAR_LIMIT.
+    Each batch is a list of {"text": ..., "voice_id": ...} dicts.
+    Preserves speaker turns — never splits a segment across batches.
+    """
+    batches = []
+    current_batch = []
+    current_chars = 0
+
+    for seg in script:
+        vid = voice_a_id if seg["host"].lower() == "alex" else voice_b_id
+        turn = {"text": seg["text"], "voice_id": vid}
+        seg_chars = len(seg["text"])
+
+        # If single segment exceeds limit, it goes alone (v3 will truncate or error)
+        if seg_chars >= V3_CHAR_LIMIT:
+            if current_batch:
+                batches.append(current_batch)
+                current_batch = []
+                current_chars = 0
+            batches.append([turn])
+            continue
+
+        if current_chars + seg_chars > V3_CHAR_LIMIT:
+            batches.append(current_batch)
+            current_batch = [turn]
+            current_chars = seg_chars
+        else:
+            current_batch.append(turn)
+            current_chars += seg_chars
+
+    if current_batch:
+        batches.append(current_batch)
+
+    return batches
+
+
+def generate_episode_audio_v3(client, script, ep_dir, voice_a_id, voice_b_id):
+    """
+    ★ CHANGE 2: v3 batched dialogue generation.
+    Splits script into batches under 4800 chars, calls dialogue API per batch,
+    concatenates resulting MP3s.
+    """
+    ep_dir = Path(ep_dir)
+    ep_dir.mkdir(parents=True, exist_ok=True)
+
+    batches = _batch_dialogue(script, voice_a_id, voice_b_id)
+    print(f"[v3] {len(script)} segments -> {len(batches)} batches")
+
+    batch_files = []
+    for i, batch in enumerate(batches):
+        total_chars = sum(len(t["text"]) for t in batch)
+        print(f"[v3] Batch {i+1}/{len(batches)}: {len(batch)} turns, {total_chars} chars")
+        audio_bytes = _call_dialogue_api(batch)
+        p = ep_dir / f"batch_{i:02d}.mp3"
+        p.write_bytes(audio_bytes)
+        batch_files.append(p)
+
+    final = ep_dir / "episode.mp3"
+    with open(final, "wb") as out:
+        for f in batch_files:
+            out.write(f.read_bytes())
+    print(f"[v3] Episode assembled: {final.stat().st_size} bytes")
+    return final
+
+
+def generate_episode_audio(client, script, ep_dir, voice_a_id, voice_b_id):
+    """
+    Dispatcher: routes to v3 or v2 based on TTS_MODE.
+    Falls back to v2 automatically if v3 fails.
+    """
+    if TTS_MODE == "v3_dialogue":
+        try:
+            return generate_episode_audio_v3(client, script, ep_dir, voice_a_id, voice_b_id)
+        except Exception as e:
+            print(f"[TTS] v3 failed ({e}), falling back to v2 segment mode")
+            return generate_episode_audio_v2(client, script, ep_dir, voice_a_id, voice_b_id)
+    else:
+        return generate_episode_audio_v2(client, script, ep_dir, voice_a_id, voice_b_id)
+
 
 # ---------------------------------------------------------------------------
 # EPISODES
@@ -809,7 +973,8 @@ def _run_generate(job_id, topic_data, depth, voice_alex, voice_morgan, is_traile
             script, sources = generate_grounded_script(topic_data, depth, production_brief)
             log_production()
 
-        update_job(job_id, progress=f"Generating audio ({len(script)} segments)...")
+        tts_label = "v3 dialogue" if TTS_MODE == "v3_dialogue" else "v2 segment"
+        update_job(job_id, progress=f"Generating audio [{tts_label}] ({len(script)} segments)...")
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         ep_type = "trailer" if is_trailer else "episode"
         ep_id = f"briefing-{ep_type}-{timestamp}"
@@ -829,6 +994,7 @@ def _run_generate(job_id, topic_data, depth, voice_alex, voice_morgan, is_traile
             "is_trailer": is_trailer,
             "sources": sources,
             "published": datetime.now(timezone.utc).isoformat(),
+            "tts_mode": TTS_MODE,
         }
         save_episode(entry)
         update_job(job_id, status="done", progress="Complete",
@@ -849,7 +1015,8 @@ def _run_chat(job_id, message, existing_topics, voice_alex, voice_morgan):
         script, sources = generate_grounded_script(topic, depth="standard",
                                                     production_brief=production_brief)
 
-        update_job(job_id, progress=f"Generating audio ({len(script)} segments)...")
+        tts_label = "v3 dialogue" if TTS_MODE == "v3_dialogue" else "v2 segment"
+        update_job(job_id, progress=f"Generating audio [{tts_label}] ({len(script)} segments)...")
         client = get_elevenlabs_client()
         voice_a_id = resolve_voice(client, voice_alex)
         voice_b_id = resolve_voice(client, voice_morgan)
@@ -874,6 +1041,7 @@ def _run_chat(job_id, message, existing_topics, voice_alex, voice_morgan):
             "is_trailer": False,
             "sources": sources,
             "published": datetime.now(timezone.utc).isoformat(),
+            "tts_mode": TTS_MODE,
         }
         save_episode(entry)
         update_job(job_id, status="done", progress="Complete",
@@ -924,6 +1092,85 @@ def _run_create_series(series_id, topic_or_prompt, num_episodes, voice_alex, voi
             s["status"] = "error"
             s["error"] = str(e)
             save_series(series_list)
+
+
+# ★ CHANGE 5: Comparison worker — generates same script with both v2 and v3
+
+def _run_comparison(job_id, topic_data, depth, voice_alex, voice_morgan, production_brief):
+    """Generate the SAME script with both v2 and v3 for side-by-side comparison."""
+    try:
+        update_job(job_id, status="running", progress="Writing script (shared for both engines)...")
+        script, sources = generate_grounded_script(topic_data, depth, production_brief)
+        log_production()
+
+        client = get_elevenlabs_client()
+        voice_a_id = resolve_voice(client, voice_alex)
+        voice_b_id = resolve_voice(client, voice_morgan)
+        if not voice_a_id or not voice_b_id:
+            update_job(job_id, status="error", error="Voice not found"); return
+
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        results = {}
+
+        # --- v2 ---
+        update_job(job_id, progress=f"Generating v2 audio ({len(script)} segments)...")
+        ep_id_v2 = f"compare-v2-{timestamp}"
+        ep_dir_v2 = EPISODES_DIR / ep_id_v2
+        try:
+            final_v2 = generate_episode_audio_v2(client, script, ep_dir_v2, voice_a_id, voice_b_id)
+            dest_v2 = EPISODES_DIR / f"{ep_id_v2}.mp3"
+            shutil.copy2(final_v2, dest_v2)
+            entry_v2 = {
+                "id": ep_id_v2,
+                "title": f"[Compare v2] {topic_data['title']}",
+                "description": topic_data.get("tension", ""),
+                "file": f"{ep_id_v2}.mp3",
+                "file_size": dest_v2.stat().st_size,
+                "depth": depth.title(),
+                "is_trailer": False,
+                "sources": sources,
+                "published": datetime.now(timezone.utc).isoformat(),
+                "tts_mode": "v2_segment",
+            }
+            save_episode(entry_v2)
+            results["v2"] = entry_v2
+        except Exception as e2:
+            print(f"[COMPARE] v2 generation failed: {e2}")
+            results["v2_error"] = str(e2)
+
+        # --- v3 ---
+        update_job(job_id, progress=f"Generating v3 dialogue audio ({len(script)} segments)...")
+        ep_id_v3 = f"compare-v3-{timestamp}"
+        ep_dir_v3 = EPISODES_DIR / ep_id_v3
+        try:
+            final_v3 = generate_episode_audio_v3(client, script, ep_dir_v3, voice_a_id, voice_b_id)
+            dest_v3 = EPISODES_DIR / f"{ep_id_v3}.mp3"
+            shutil.copy2(final_v3, dest_v3)
+            entry_v3 = {
+                "id": ep_id_v3,
+                "title": f"[Compare v3] {topic_data['title']}",
+                "description": topic_data.get("tension", ""),
+                "file": f"{ep_id_v3}.mp3",
+                "file_size": dest_v3.stat().st_size,
+                "depth": depth.title(),
+                "is_trailer": False,
+                "sources": sources,
+                "published": datetime.now(timezone.utc).isoformat(),
+                "tts_mode": "v3_dialogue",
+            }
+            save_episode(entry_v3)
+            results["v3"] = entry_v3
+        except Exception as e3:
+            print(f"[COMPARE] v3 generation failed: {e3}")
+            results["v3_error"] = str(e3)
+
+        update_job(job_id, status="done", progress="Comparison complete",
+                   result={"comparison": results, "sources": sources})
+
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        update_job(job_id, status="error", error=str(e))
+
 
 # ---------------------------------------------------------------------------
 # ROUTES
@@ -1132,6 +1379,7 @@ def api_autoqueue():
         return jsonify({"success": True, "job_id": job_id})
     return jsonify({"success": False, "error": "Auto-queue failed - check AR dashboard connectivity"})
 
+
 @app.route('/api/discover/suggestions', methods=['GET'])
 def api_discover_suggestions():
     SUGGESTIONS_CACHE = DATA_DIR / "suggestions_cache.json"
@@ -1242,13 +1490,9 @@ Return ONLY a valid JSON array of exactly 10 objects, no markdown, no preamble:
         return jsonify({"suggestions": [], "error": str(e), "cached": False}), 500
 
 
+
 @app.route('/api/cron/nightly-trailers', methods=['GET', 'POST'])
 def api_cron_nightly_trailers():
-    """
-    Nightly job: generate 6 high-confidence trailer topics and queue them for production.
-    Cron-job.org URL: /api/cron/nightly-trailers?secret=YOUR_CRON_SECRET
-    Recommended: Daily at 22:00 America/Chicago
-    """
     secret = request.args.get("secret") or request.headers.get("Authorization", "").replace("Bearer ", "")
     if CRON_SECRET and secret != CRON_SECRET:
         return jsonify({"success": False, "error": "Unauthorized"}), 401
@@ -1392,11 +1636,6 @@ def api_nightly_trailer_status():
 
 @app.route('/api/cron/autoqueue', methods=['GET', 'POST'])
 def api_cron_autoqueue():
-    """
-    Scheduled autoqueue endpoint - called by external cron (cron-job.org or similar).
-    Recommended schedule: Daily at 06:00 America/Chicago
-    URL: /api/cron/autoqueue?secret=YOUR_CRON_SECRET
-    """
     secret = request.args.get("secret") or request.headers.get("Authorization", "").replace("Bearer ", "")
     if CRON_SECRET and secret != CRON_SECRET:
         return jsonify({"success": False, "error": "Unauthorized"}), 401
@@ -1414,18 +1653,9 @@ def api_cron_autoqueue():
     return jsonify({"success": False, "error": "Autoqueue failed"}), 500
 
 
-# ---------------------------------------------------------------------------
-# MORNING PREP CRON - Pre-warms topics and suggestions cache before you open the page
-# ---------------------------------------------------------------------------
 
 @app.route('/api/cron/morning-prep', methods=['GET', 'POST'])
 def api_cron_morning_prep():
-    """
-    Morning warm-up job: pre-build topics cache and suggestions cache
-    so the page loads instantly when opened.
-    Recommended: Daily at 05:30 America/Chicago (11:30 UTC)
-    URL: /api/cron/morning-prep?secret=YOUR_CRON_SECRET
-    """
     secret = request.args.get("secret") or request.headers.get("Authorization", "").replace("Bearer ", "")
     if CRON_SECRET and secret != CRON_SECRET:
         return jsonify({"success": False, "error": "Unauthorized"}), 401
@@ -1434,7 +1664,6 @@ def api_cron_morning_prep():
     MORNING_PREP_LOG = DATA_DIR / "morning_prep_log.json"
     today = date.today().isoformat()
 
-    # Idempotency: don't run twice in one day
     if not force and MORNING_PREP_LOG.exists():
         try:
             log = json.loads(MORNING_PREP_LOG.read_text())
@@ -1446,7 +1675,6 @@ def api_cron_morning_prep():
 
     results = {"topics": False, "suggestions": False, "errors": []}
 
-    # Step 1: Pre-warm topics cache
     try:
         topics = get_topics_for_today()
         results["topics"] = len(topics)
@@ -1455,7 +1683,6 @@ def api_cron_morning_prep():
         results["errors"].append(f"Topics failed: {str(e)}")
         print(f"[MORNING PREP] Topics failed: {e}")
 
-    # Step 2: Pre-warm suggestions cache
     SUGGESTIONS_CACHE = DATA_DIR / "suggestions_cache.json"
     try:
         today_topics = []
@@ -1545,7 +1772,6 @@ Return ONLY a valid JSON array of exactly 10 objects, no markdown, no preamble:
         results["errors"].append(f"Suggestions failed: {str(e)}")
         print(f"[MORNING PREP] Suggestions failed: {e}")
 
-    # Log run
     MORNING_PREP_LOG.write_text(json.dumps({
         "date": today,
         "run_at": datetime.now(timezone.utc).isoformat(),
@@ -1562,6 +1788,7 @@ Return ONLY a valid JSON array of exactly 10 objects, no markdown, no preamble:
         "errors": results["errors"],
         "run_at": datetime.now(timezone.utc).isoformat(),
     })
+
 
 
 # --- Series ---
@@ -1724,6 +1951,117 @@ def api_generate():
         daemon=True
     ).start()
     return jsonify({"success": True, "job_id": job_id, "status": "queued"})
+
+
+# ---------------------------------------------------------------------------
+# ★ CHANGE 4: Voice Audition Endpoints
+# ---------------------------------------------------------------------------
+
+@app.route('/api/voices/recommendations', methods=['GET'])
+def api_voice_recommendations():
+    """Return recommended v3-optimized voice pairs for audition."""
+    return jsonify({"pairs": V3_VOICE_PAIRS, "tts_mode": TTS_MODE})
+
+
+@app.route('/api/voices/audition', methods=['POST'])
+def api_voice_audition():
+    """Generate a short v3 dialogue sample with a specified voice pair."""
+    data = request.json or {}
+    voice_alex = data.get("voice_alex", "Chris - Charming, Down-to-Earth")
+    voice_morgan = data.get("voice_morgan", "Matilda - Knowledgable, Professional")
+    sample_alex = data.get("sample_text_alex",
+        "[measured] Here's what the data actually shows. The organizations reporting the highest AI ROI "
+        "aren't the ones with the biggest models. [emphatic] They're the ones who got the workflow right first.")
+    sample_morgan = data.get("sample_text_morgan",
+        "[leaning in] Follow the incentives. Every enterprise AI deployment that stalled, "
+        "I can trace back to a misalignment between who approved the budget and who owns the outcome. "
+        "[wry] That's not a technology problem.")
+
+    if not ELEVEN_API_KEY:
+        return jsonify({"success": False, "error": "ElevenLabs API key not configured"})
+
+    try:
+        client = get_elevenlabs_client()
+        voice_a_id = resolve_voice(client, voice_alex)
+        voice_b_id = resolve_voice(client, voice_morgan)
+        if not voice_a_id or not voice_b_id:
+            return jsonify({"success": False, "error": f"Voice not found: alex={voice_alex}, morgan={voice_morgan}"}), 404
+
+        dialogue = [
+            {"text": sample_alex, "voice_id": voice_a_id},
+            {"text": sample_morgan, "voice_id": voice_b_id},
+        ]
+        audio_bytes = _call_dialogue_api(dialogue)
+
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        filename = f"audition-{timestamp}.mp3"
+        dest = EPISODES_DIR / filename
+        dest.write_bytes(audio_bytes)
+
+        return jsonify({
+            "success": True,
+            "audio_url": f"/episodes/{filename}",
+            "voice_alex": voice_alex,
+            "voice_morgan": voice_morgan,
+            "file_size": len(audio_bytes),
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# ★ CHANGE 5: Comparison Generation Endpoint
+# ---------------------------------------------------------------------------
+
+@app.route('/api/generate/compare', methods=['POST'])
+def api_generate_compare():
+    """Generate the SAME script with both v2 and v3 engines for side-by-side listening."""
+    data = request.json or {}
+    topic_data = data.get("topic_data")
+    topic_title = data.get("topic", "").strip()
+    depth = data.get("depth", "standard")
+    voice_alex = data.get("voice_alex", "Chris - Charming, Down-to-Earth")
+    voice_morgan = data.get("voice_morgan", "Matilda - Knowledgable, Professional")
+    production_brief = data.get("production_brief", "")
+
+    if not topic_data and not topic_title:
+        return jsonify({"success": False, "error": "Topic required"})
+    if not ELEVEN_API_KEY:
+        return jsonify({"success": False, "error": "ElevenLabs API key not configured"})
+
+    if not topic_data:
+        topic_data = {"title": topic_title, "tension": topic_title,
+                      "why_it_matters": "", "common_mistake": "", "sub_questions": [],
+                      "trailer_hook": data.get("trailer_hook", topic_title)}
+
+    job_id = create_job("comparison")
+    threading.Thread(
+        target=_run_comparison,
+        args=(job_id, topic_data, depth, voice_alex, voice_morgan, production_brief),
+        daemon=True
+    ).start()
+    return jsonify({"success": True, "job_id": job_id, "status": "queued",
+                    "note": "Will generate both v2 and v3 versions of the same script"})
+
+
+# ---------------------------------------------------------------------------
+# ★ TTS Config Endpoint
+# ---------------------------------------------------------------------------
+
+@app.route('/api/tts/config', methods=['GET'])
+def api_tts_config():
+    """Return current TTS engine configuration."""
+    return jsonify({
+        "tts_mode": TTS_MODE,
+        "v3_char_limit": V3_CHAR_LIMIT,
+        "available_modes": ["v3_dialogue", "v2_segment"],
+        "descriptions": {
+            "v3_dialogue": "ElevenLabs v3 Text to Dialogue API — premium conversational quality, 2x cost, supports audio tags",
+            "v2_segment": "ElevenLabs Turbo v2.5 — per-segment generation, lower cost, legacy mode",
+        },
+        "voice_pairs": V3_VOICE_PAIRS,
+    })
+
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8080))
