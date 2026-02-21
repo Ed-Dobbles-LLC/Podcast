@@ -130,7 +130,7 @@ nav { background: var(--navy); border-bottom: 1px solid rgba(255,255,255,0.1); p
 .series-badge.producing { background: rgba(133,228,253,0.12); border: 1px solid rgba(133,228,253,0.4); color: var(--amber); }
 .series-badge.done { background: rgba(0,185,142,0.12); border: 1px solid rgba(0,185,142,0.3); color: var(--green); }
 .series-badge.error { background: rgba(219,84,97,0.12); border: 1px solid rgba(219,84,97,0.3); color: var(--red-bright); }
-.series-badge.outlining { background: rgba(50,115,219,0.12); border: 1px solid rgba(50,115,219,0.3); color: var(--blue); }
+.series-badge.outlining, .series-badge.researching { background: rgba(50,115,219,0.12); border: 1px solid rgba(50,115,219,0.3); color: var(--blue); }
 .series-progress { height: 4px; background: var(--surface2); border-radius: 2px; margin-bottom: 0.75rem; overflow: hidden; }
 .series-progress-fill { height: 100%; background: var(--blue); border-radius: 2px; transition: width 0.5s; }
 .series-ep-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; padding: 0.3rem 0; border-bottom: 1px solid var(--border); }
@@ -829,14 +829,14 @@ async function loadSeries() {
     const list=data.series||[], el=document.getElementById('seriesList');
     if(!list.length){el.innerHTML='<div class="empty-state">No series yet. Create one above or from any topic card.</div>';return;}
     el.innerHTML=list.slice().reverse().map(s=>renderSeriesCard(s)).join('');
-    list.filter(s=>['outlining','producing'].includes(s.status)).forEach(s=>{ if(!seriesPollers[s.id]) pollSeriesProgress(s.id); });
+    list.filter(s=>['outlining','researching','producing'].includes(s.status)).forEach(s=>{ if(!seriesPollers[s.id]) pollSeriesProgress(s.id); });
   } catch(e){}
 }
 
 function renderSeriesCard(s) {
   const pct=s.total?Math.round((s.completed||0)/s.total*100):0;
-  const badgeMap={producing:'producing',done:'done',error:'error',outlining:'outlining',queued:'producing'};
-  const labelMap={producing:'Producing',done:'Complete',error:'Error',outlining:'Building Outline',queued:'Queued'};
+  const badgeMap={producing:'producing',done:'done',error:'error',outlining:'outlining',researching:'researching',queued:'producing'};
+  const labelMap={producing:'Producing',done:'Complete',error:'Error',outlining:'Building Outline',researching:'Researching & Planning',queued:'Queued'};
   const badgeClass=badgeMap[s.status]||'producing', badgeLabel=labelMap[s.status]||s.status;
   const rows=(s.job_statuses||[]).map((ep,i)=>`
     <div class="series-ep-row">

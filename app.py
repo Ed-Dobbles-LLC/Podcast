@@ -408,55 +408,163 @@ def load_series():
 def save_series(series_list):
     SERIES_FILE.write_text(json.dumps(series_list, indent=2))
 
-def generate_series_outline(topic_or_prompt, num_episodes=6):
+def generate_series_bible(topic_or_prompt, num_episodes=6):
+    """Phase 1: Deep research + narrative architecture. Returns a series bible dict."""
     if isinstance(topic_or_prompt, dict):
-        seed = f"TOPIC: {topic_or_prompt['title']}\nTENSION: {topic_or_prompt.get('tension','')}"
+        seed = (f"TOPIC: {topic_or_prompt['title']}\n"
+                f"TENSION: {topic_or_prompt.get('tension', '')}\n"
+                f"WHY IT MATTERS: {topic_or_prompt.get('why_it_matters', '')}\n"
+                f"KEY QUESTIONS: {'; '.join(topic_or_prompt.get('sub_questions', []))}")
     else:
-        seed = f"PROMPT/SOURCE: {topic_or_prompt}"
+        seed = f"TOPIC/PROMPT: {topic_or_prompt}"
 
-    prompt = f"""You are an executive podcast series producer.
-Create a {num_episodes}-episode deep-dive series arc for a senior analytics and AI executive.
+    prompt = f"""You are a documentary series showrunner AND investigative journalist planning a {num_episodes}-episode premium executive podcast series.
 
-SEED:
+Your task has TWO phases. Complete BOTH thoroughly.
+
+PHASE 1 — INVESTIGATIVE RESEARCH
+Search for and gather REAL, CURRENT, VERIFIABLE information on this topic:
+
 {seed}
 
-Design a progressive series where each episode builds on the previous.
-Episode 1 = executive overview (the what and why).
-Episodes 2-{num_episodes-1} = progressively deeper angles (mechanisms, case studies, frameworks, edge cases, implications).
-Episode {num_episodes} = synthesis and forward view (what to do, what comes next).
+Research specifically:
+- Recent developments and breaking news (last 12-24 months)
+- Key players: companies, executives, investors, critics, regulators
+- Named controversies, lawsuits, regulatory actions, competing perspectives
+- Historical timeline: founding, key milestones, inflection points, turning points
+- Quantitative data: valuations, revenue, market sizes, headcount, financial figures
+- Named sources: SEC filings, earnings calls, published interviews, investigative reports, academic research
+- Structural forces: market dynamics, incentive systems, regulatory frameworks
 
-Each episode must stand alone AND reward listeners who follow the arc.
+CRITICAL: Every fact must be REAL and ATTRIBUTABLE. No fabricated statistics. No made-up quotes. No invented sources. If you cannot verify something, omit it.
 
-Return ONLY a valid JSON array of {num_episodes} topic objects, no markdown:
-[{{
-  "episode_number": 1,
-  "title": "specific episode title",
-  "tension": "core thesis for this episode in 1-2 sentences",
-  "why_it_matters": "strategic importance in 1 sentence",
-  "common_mistake": "what leaders get wrong on this specific angle",
-  "sub_questions": ["question 1", "question 2", "question 3"],
-  "trailer_hook": "3-4 sentence spoken-word hook",
-  "series_context": "1-2 sentences: how this episode fits the arc and what came before"
-}}]"""
+PHASE 2 — SERIES ARCHITECTURE
+Using your research, design a {num_episodes}-episode narrative arc. Think like a showrunner planning a season of prestige television — every episode serves the whole.
+
+The series must have:
+- A clear central thesis that builds across all {num_episodes} episodes
+- Deliberate progression: each episode advances the argument in a way that REQUIRES the previous episode
+- Intellectual escalation: complexity and nuance increase as the listener's understanding deepens
+- At least 3 narrative threads that weave across multiple episodes
+- Bridges between episodes that create anticipation
+
+Return ONLY a valid JSON object, no markdown fences, no preamble:
+{{
+  "series_thesis": "The central argument the entire series builds toward (2-3 sentences)",
+  "narrative_arc": "How the series progresses from episode 1 to {num_episodes} — the emotional and intellectual journey (3-4 sentences)",
+  "target_listener_transformation": "What the listener understands after the series that they did not before (1-2 sentences)",
+  "research_findings": {{
+    "key_facts": [
+      {{"fact": "specific verifiable fact or statistic", "source": "named attribution (report, filing, article)", "assigned_episode": 1}},
+      {{"fact": "another fact", "source": "attribution", "assigned_episode": 2}}
+    ],
+    "key_players": [
+      {{"name": "person or company name", "role": "their relevance to the story", "assigned_episode": 1}}
+    ],
+    "timeline": [
+      {{"date": "year or specific date", "event": "what happened", "significance": "why it matters to the arc"}}
+    ],
+    "controversies": [
+      {{"topic": "the disagreement or tension", "sides": "who argues what and why", "assigned_episode": 2}}
+    ]
+  }},
+  "episodes": [
+    {{
+      "episode_number": 1,
+      "title": "specific, compelling episode title",
+      "role_in_arc": "What this episode accomplishes in the overall narrative (1-2 sentences)",
+      "central_argument": "The specific thesis of THIS episode (1-2 sentences)",
+      "tension": "The core question or tension this episode explores",
+      "why_it_matters": "Strategic importance (1 sentence)",
+      "common_mistake": "What leaders get wrong on this angle",
+      "sub_questions": ["question 1", "question 2", "question 3"],
+      "assigned_research": ["brief description of facts/data to use from research_findings"],
+      "builds_on": null,
+      "seeds_for_future": "Concepts introduced here that pay off in later episodes",
+      "bridge_to_next": "How this episode ends to set up the next (the cliffhanger or open question)",
+      "host_dynamics": "Who leads (Alex or Morgan), where they disagree, how the dynamic serves this episode"
+    }}
+  ],
+  "narrative_threads": [
+    {{
+      "thread": "A theme, question, or argument that evolves across episodes",
+      "appears_in": [1, 3, {num_episodes}],
+      "evolution": "How this thread develops from first mention to resolution"
+    }}
+  ],
+  "progression_logic": "Episode-by-episode: why this order? What does the listener know after ep 2 that they didn't after ep 1? One sentence per transition."
+}}
+
+REQUIREMENTS:
+- research_findings.key_facts must contain at least {num_episodes * 3} entries, distributed across episodes
+- research_findings.key_players must contain at least {num_episodes * 2} entries
+- research_findings.timeline must contain at least {max(5, num_episodes)} entries
+- narrative_threads must contain at least 3 threads
+- Every episode must have a non-null bridge_to_next (except the final episode which gets a forward-looking statement)
+- progression_logic must explain EVERY episode transition"""
 
     try:
-        data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=4000, model=SCRIPT_MODEL)
+        try:
+            data = call_anthropic(
+                [{"role": "user", "content": prompt}],
+                max_tokens=8000, use_web_search=True, model=SCRIPT_MODEL
+            )
+            print("[SERIES BIBLE] Generated with web search (Opus)")
+        except Exception as ws_err:
+            print(f"[SERIES BIBLE] Web search failed ({ws_err}), falling back to no-search")
+            data = call_anthropic(
+                [{"role": "user", "content": prompt}],
+                max_tokens=8000, use_web_search=False, model=SCRIPT_MODEL
+            )
+            print("[SERIES BIBLE] Generated without web search (Opus)")
+
         text = extract_text(data).strip()
         if text.startswith("```"):
             text = text.split("```")[1]
             if text.startswith("json"): text = text[4:]
-        episodes = json.loads(text)
-        print(f"[SERIES] Generated {len(episodes)}-episode arc (Opus)")
-        return episodes
+        text = text.strip()
+        if not text.startswith("{"):
+            idx = text.find("{")
+            if idx >= 0:
+                text = text[idx:]
+        bible = json.loads(text)
+
+        ep_count = len(bible.get("episodes", []))
+        fact_count = len(bible.get("research_findings", {}).get("key_facts", []))
+        thread_count = len(bible.get("narrative_threads", []))
+        print(f"[SERIES BIBLE] {ep_count} episodes, {fact_count} research facts, {thread_count} narrative threads")
+        return bible
     except Exception as e:
-        print(f"[SERIES] Outline generation failed: {e}")
+        print(f"[SERIES BIBLE] Generation failed: {e}")
         raise
 
-def _run_series(series_id, episodes, voice_alex, voice_morgan):
+
+def summarize_episode_script(script, episode_title, episode_number):
+    """Generate a concise summary of a produced episode for series continuity."""
+    script_text = "\n".join(f"{s['host']}: {s['text']}" for s in script[:20])
+
+    prompt = f"""Summarize this podcast episode in 4-6 sentences for use as context when writing subsequent episodes in the same series.
+
+Include: key arguments made, specific data or examples cited, conclusions reached, open questions left unresolved, and any concepts introduced that future episodes should reference.
+
+Episode {episode_number}: "{episode_title}"
+
+TRANSCRIPT:
+{script_text}
+
+Return ONLY the summary paragraph. No formatting, no bullet points."""
+
+    data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=500, model=EDITORIAL_MODEL)
+    return extract_text(data).strip()
+
+def _run_series(series_id, bible, voice_alex, voice_morgan):
     series_list = load_series()
     series_entry = next((s for s in series_list if s["id"] == series_id), None)
     if not series_entry:
         return
+
+    episodes = bible.get("episodes", [])
+    prior_summaries = []
 
     for i, ep_topic in enumerate(episodes):
         ep_num = i + 1
@@ -464,15 +572,27 @@ def _run_series(series_id, episodes, voice_alex, voice_morgan):
 
         try:
             update_job(job_id, status="running",
-                       progress=f"Episode {ep_num}/{len(episodes)}: Writing script...")
+                       progress=f"Episode {ep_num}/{len(episodes)}: Writing script with series context...")
 
-            production_brief = ep_topic.get("series_context", "")
-            if ep_num > 1:
-                production_brief += f" This is episode {ep_num} of {len(episodes)} in the series - assume listeners heard previous episodes."
-
-            script, sources = generate_grounded_script(ep_topic, depth="standard",
-                                                        production_brief=production_brief)
+            script, sources = generate_grounded_script(
+                ep_topic, depth="standard",
+                series_bible=bible,
+                prior_episode_summaries=prior_summaries
+            )
             log_production()
+
+            # Generate summary of this episode for subsequent episodes
+            update_job(job_id, progress=f"Episode {ep_num}/{len(episodes)}: Building continuity summary...")
+            try:
+                summary = summarize_episode_script(script, ep_topic["title"], ep_num)
+            except Exception:
+                summary = f"{script[0]['text'][:300]}... {script[-1]['text'][:300]}"
+
+            prior_summaries.append({
+                "episode_number": ep_num,
+                "title": ep_topic["title"],
+                "summary": summary
+            })
 
             update_job(job_id, progress=f"Episode {ep_num}/{len(episodes)}: Generating audio ({len(script)} segments)...")
             client = get_elevenlabs_client()
@@ -510,6 +630,7 @@ def _run_series(series_id, episodes, voice_alex, voice_morgan):
             s = next((x for x in series_list if x["id"] == series_id), None)
             if s:
                 s["completed"] = s.get("completed", 0) + 1
+                s["episode_summaries"] = prior_summaries
                 save_series(series_list)
 
         except Exception as e:
@@ -557,8 +678,89 @@ Tone: sharp, executive, zero fluff."""
 # SCRIPT GENERATION
 # ---------------------------------------------------------------------------
 
-def generate_grounded_script(topic, depth="standard", production_brief=""):
+def generate_grounded_script(topic, depth="standard", production_brief="", series_bible=None, prior_episode_summaries=None):
     brief_section = f"\nPRODUCTION BRIEF:\n{production_brief}\n" if production_brief else ""
+
+    series_section = ""
+    if series_bible:
+        ep_num = topic.get("episode_number", 1)
+        total_eps = len(series_bible.get("episodes", []))
+
+        # Gather research assigned to this episode
+        research_lines = []
+        for fact in series_bible.get("research_findings", {}).get("key_facts", []):
+            if fact.get("assigned_episode") == ep_num:
+                research_lines.append(f"- {fact['fact']} (Source: {fact.get('source', 'N/A')})")
+        for player in series_bible.get("research_findings", {}).get("key_players", []):
+            if player.get("assigned_episode") == ep_num:
+                research_lines.append(f"- Key player: {player['name']} — {player.get('role', '')}")
+        for cont in series_bible.get("research_findings", {}).get("controversies", []):
+            if cont.get("assigned_episode") == ep_num:
+                research_lines.append(f"- Controversy: {cont['topic']} — {cont.get('sides', '')}")
+
+        # Gather narrative threads for this episode
+        thread_lines = []
+        for thread in series_bible.get("narrative_threads", []):
+            if ep_num in thread.get("appears_in", []):
+                thread_lines.append(f"- {thread['thread']}: {thread.get('evolution', '')}")
+
+        # Build prior episode summaries context
+        prior_context = ""
+        if prior_episode_summaries:
+            prior_parts = []
+            for ps in prior_episode_summaries:
+                prior_parts.append(f"Episode {ps['episode_number']} — \"{ps['title']}\": {ps['summary']}")
+            prior_context = "\n".join(prior_parts)
+
+        # Get this episode's bible details
+        ep_details = {}
+        for ep in series_bible.get("episodes", []):
+            if ep.get("episode_number") == ep_num:
+                ep_details = ep
+                break
+
+        # Include timeline context
+        timeline_lines = []
+        for evt in series_bible.get("research_findings", {}).get("timeline", []):
+            timeline_lines.append(f"- {evt.get('date', '?')}: {evt.get('event', '')} ({evt.get('significance', '')})")
+
+        nl = chr(10)
+        series_section = f"""
+SERIES CONTEXT — THIS IS EPISODE {ep_num} OF A {total_eps}-EPISODE SERIES
+
+Series Thesis: {series_bible.get('series_thesis', '')}
+Narrative Arc: {series_bible.get('narrative_arc', '')}
+Listener Transformation Goal: {series_bible.get('target_listener_transformation', '')}
+
+THIS EPISODE'S ROLE: "{ep_details.get('title', topic.get('title', ''))}"
+Role in Arc: {ep_details.get('role_in_arc', '')}
+Central Argument: {ep_details.get('central_argument', '')}
+Builds On: {ep_details.get('builds_on', 'This is the series opener — establish the foundation.')}
+Seeds for Future: {ep_details.get('seeds_for_future', '')}
+Bridge to Next: {ep_details.get('bridge_to_next', '')}
+Host Dynamic: {ep_details.get('host_dynamics', '')}
+
+Progression Logic: {series_bible.get('progression_logic', '')}
+
+KEY TIMELINE (reference as needed):
+{nl.join(timeline_lines) if timeline_lines else '(No timeline data)'}
+
+ASSIGNED RESEARCH — Use these REAL facts in your script (do NOT fabricate alternatives):
+{nl.join(research_lines) if research_lines else '(Use research from the series thesis and your own verified knowledge)'}
+
+NARRATIVE THREADS TO WEAVE IN:
+{nl.join(thread_lines) if thread_lines else '(No specific threads for this episode)'}
+
+{("PREVIOUSLY ON... (the listener has heard these episodes — reference naturally):" + nl + prior_context) if prior_context else "This is the FIRST episode — establish the foundation, vocabulary, and framing the series will build on."}
+
+SERIES EPISODE RULES:
+- Honor this episode's assigned role — do NOT cover ground reserved for other episodes
+- Reference prior episodes naturally when relevant ("As we explored last time...", "Remember when we looked at...")
+- Plant seeds for upcoming episodes ("We will dig into this next time...", "There's a whole dimension here we haven't touched yet...")
+- Use the assigned research data — no fabrication
+- The hosts have evolved since episode 1 — they know what the audience knows
+- End with a bridge that creates genuine anticipation for the next episode
+"""
 
     seg_min = {"executive": 10, "standard": 16, "deep": 24}.get(depth, 16)
 
@@ -588,8 +790,7 @@ CORE TENSION: {topic['tension']}
 WHAT LEADERS GET WRONG: {topic.get('common_mistake', '')}
 KEY QUESTIONS: {'; '.join(topic.get('sub_questions', []))}
 WHY IT MATTERS: {topic.get('why_it_matters', '')}
-{brief_section}
-
+{brief_section}{series_section}
 CONTENT STANDARDS (every episode must hit ALL):
 - Name at least 3 specific companies, executives, or real situations (not "a major CPG brand")
 - Include at least 2 specific data points, statistics, or concrete numbers
@@ -619,13 +820,15 @@ SOURCES: source1, source2, source3"""
 
     try:
         try:
+            script_tokens = 5000 if series_bible else 4000
             data = call_anthropic([{"role": "user", "content": prompt}],
-                                  max_tokens=4000, use_web_search=True, model=SCRIPT_MODEL)
+                                  max_tokens=script_tokens, use_web_search=True, model=SCRIPT_MODEL)
             print("[SCRIPT] Web search enabled, using Opus")
         except Exception as ws_err:
             print(f"[SCRIPT] Web search failed ({ws_err}), falling back to no-search")
+            script_tokens = 5000 if series_bible else 4000
             data = call_anthropic([{"role": "user", "content": prompt}],
-                                  max_tokens=4000, use_web_search=False, model=SCRIPT_MODEL)
+                                  max_tokens=script_tokens, use_web_search=False, model=SCRIPT_MODEL)
         full_text = extract_text(data)
 
         sources = []
@@ -890,9 +1093,11 @@ def _run_create_series(series_id, topic_or_prompt, num_episodes, voice_alex, voi
         s = next((x for x in series_list if x["id"] == series_id), None)
         if not s: return
 
-        s["status"] = "outlining"
+        # Phase 1: Deep research + series architecture
+        s["status"] = "researching"
         save_series(series_list)
-        episodes = generate_series_outline(topic_or_prompt, num_episodes)
+        bible = generate_series_bible(topic_or_prompt, num_episodes)
+        episodes = bible.get("episodes", [])
 
         job_ids = []
         for ep in episodes:
@@ -903,12 +1108,14 @@ def _run_create_series(series_id, topic_or_prompt, num_episodes, voice_alex, voi
         s = next((x for x in series_list if x["id"] == series_id), None)
         s["episodes"] = episodes
         s["job_ids"] = job_ids
+        s["series_bible"] = bible
         s["status"] = "producing"
         s["total"] = len(episodes)
         s["completed"] = 0
         save_series(series_list)
 
-        _run_series(series_id, episodes, voice_alex, voice_morgan)
+        # Phase 2: Episode generation with bible context
+        _run_series(series_id, bible, voice_alex, voice_morgan)
 
         series_list = load_series()
         s = next((x for x in series_list if x["id"] == series_id), None)
