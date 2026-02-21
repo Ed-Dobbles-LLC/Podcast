@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Intelligence Briefings — Executive Podcast</title>
-<meta name="description" content="Senior-level analysis on AI, analytics, and enterprise strategy. Two experienced practitioners — no hype, no basics.">
+<title>Intelligence Briefings &#x2014; Executive Podcast</title>
+<meta name="description" content="Senior-level analysis on AI, analytics, and enterprise strategy. Two experienced practitioners &#x2014; no hype, no basics.">
 <meta property="og:title" content="Intelligence Briefings">
 <meta property="og:description" content="Senior-level analysis on AI, analytics, and enterprise strategy.">
 <meta property="og:type" content="website">
@@ -105,7 +105,7 @@ footer a:hover{color:var(--white)}
 <div class="modal-overlay" id="rssModal">
   <div class="modal-box">
     <h3>Subscribe via Podcast App</h3>
-    <p>Copy the RSS URL below and paste it into Apple Podcasts (File → Add a Show by URL), Overcast, Pocket Casts, or any app that supports custom feeds.</p>
+    <p>Copy the RSS URL below and paste it into Apple Podcasts (File &#x2192; Add a Show by URL), Overcast, Pocket Casts, or any app that supports custom feeds.</p>
     <div class="rss-url-box" id="rssUrlDisplay"></div>
     <div class="modal-actions">
       <button class="btn-primary" style="flex:1" onclick="copyFeedUrl()">Copy Feed URL</button>
@@ -121,7 +121,7 @@ footer a:hover{color:var(--white)}
     <div class="rss-url-box" id="shareUrlDisplay"></div>
     <div class="modal-actions">
       <button class="btn-primary" style="flex:1" onclick="copyShareUrl()">Copy Link</button>
-      <button class="btn-ghost" onclick="shareToLinkedIn()">↗ LinkedIn</button>
+      <button class="btn-ghost" onclick="shareToLinkedIn()">&#x2197; LinkedIn</button>
       <button class="btn-ghost" onclick="closeModal('shareModal')">Close</button>
     </div>
   </div>
@@ -135,7 +135,7 @@ footer a:hover{color:var(--white)}
     <h1>INTELLIGENCE <span>BRIEFINGS</span></h1>
     <p class="show-desc">Senior-level analysis on AI, analytics, and enterprise strategy. Two experienced practitioners work through the decisions, incentives, and structural forces that actually matter at the executive level.</p>
     <div class="hero-actions">
-      <button class="btn-primary" onclick="openModal('rssModal')">🎙 Subscribe via RSS</button>
+      <button class="btn-primary" onclick="openModal('rssModal')">&#x1F399; Subscribe via RSS</button>
       <button class="btn-ghost" onclick="openApplePodcasts()">Open in Apple Podcasts</button>
       <span class="ep-count-badge" id="epCountBadge">Loading...</span>
     </div>
@@ -150,7 +150,7 @@ footer a:hover{color:var(--white)}
       <div class="np-desc" id="npDesc"></div>
       <div class="np-audio"><audio id="mainPlayer" controls style="width:100%"></audio></div>
       <div class="np-share">
-        <button class="btn-sm" onclick="openShareForCurrent()">↗ Share This Episode</button>
+        <button class="btn-sm" onclick="openShareForCurrent()">&#x2197; Share This Episode</button>
         <button class="btn-sm" onclick="linkedInCurrent()">Share on LinkedIn</button>
       </div>
     </div>
@@ -189,7 +189,7 @@ footer a:hover{color:var(--white)}
     <div class="side-card">
       <div class="side-label">About This Show</div>
       <div class="about-text">
-        <p>Built for executives who already know the fundamentals. No AI introductions. No listicles. Topics selected for strategic leverage — ideas that change how you think, not just what you know.</p>
+        <p>Built for executives who already know the fundamentals. No AI introductions. No listicles. Topics selected for strategic leverage &#x2014; ideas that change how you think, not just what you know.</p>
         <p>Produced by an AI editorial engine calibrated to enterprise analytics, beverage alcohol, and executive org design. Two AI hosts debate each topic with genuine disagreement.</p>
       </div>
     </div>
@@ -281,7 +281,7 @@ function renderEpisodes() {
     const qt=ep.title.replace(/"/g,'&quot;');
     return `<div class="ep-item${active?' active':''}" id="epitem-${ep.id}">
       <div class="ep-main" onclick="toggleEp('${ep.id}')">
-        <div class="ep-play" onclick="event.stopPropagation();playEp('${ep.id}')">${active?'▐▐':'▶'}</div>
+        <div class="ep-play" onclick="event.stopPropagation();playEp('${ep.id}')">${active?'\u2590\u2590':'\u25B6'}</div>
         <div class="ep-info">
           <div class="ep-title-text">${ep.title}</div>
           <div class="ep-meta-row">
@@ -290,7 +290,7 @@ function renderEpisodes() {
             ${ep.series_id?`<span class="ep-badge series">Series</span>`:''}
           </div>
         </div>
-        <div class="ep-chevron">▾</div>
+        <div class="ep-chevron">\u25BE</div>
       </div>
       <div class="ep-detail">
         ${ep.description?`<div class="ep-desc-text">${ep.description}</div>`:''}
@@ -298,7 +298,7 @@ function renderEpisodes() {
           <audio controls src="/episodes/${ep.file}" data-ep-id="${ep.id}" data-ep-title="${qt}"></audio>
         </div>
         <div class="ep-actions">
-          <button class="btn-sm" onclick="openShareFor('${ep.id}')">↗ Share</button>
+          <button class="btn-sm" onclick="openShareFor('${ep.id}')">\u2197 Share</button>
           <button class="btn-sm" onclick="linkedInFor('${ep.id}')">LinkedIn</button>
         </div>
         ${ep.sources&&ep.sources.length?`<div class="ep-sources-text">Sources: ${ep.sources.join(', ')}</div>`:''}
@@ -341,7 +341,7 @@ function setNowPlaying(ep, updateMainPlayer) {
   document.querySelectorAll('.ep-item').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.ep-play').forEach(btn=>{
     const item=btn.closest('.ep-item');
-    if(item) btn.textContent=item.id==='epitem-'+ep.id?'▐▐':'▶';
+    if(item) btn.textContent=item.id==='epitem-'+ep.id?'\u2590\u2590':'\u25B6';
   });
   const el=document.getElementById('epitem-'+ep.id); if(el) el.classList.add('active');
 }
@@ -370,7 +370,7 @@ function openShareForCurrent() { if(currentEp) openShareFor(currentEp.id); }
 function copyShareUrl() { navigator.clipboard.writeText(BASE+'/listen'); showToast('Link copied'); }
 function shareToLinkedIn() {
   const ep=_shareEp;
-  const text=ep?`"${ep.title}" — ${ep.description||'Executive intelligence briefing on AI and analytics strategy.'} ${BASE}/listen`:'';
+  const text=ep?`"${ep.title}" \u2014 ${ep.description||'Executive intelligence briefing on AI and analytics strategy.'} ${BASE}/listen`:'';
   window.open('https://www.linkedin.com/sharing/share-offsite/?url='+encodeURIComponent(BASE+'/listen')+'&summary='+encodeURIComponent(text),'_blank');
 }
 function linkedInFor(id) { _shareEp=allEpisodes.find(e=>e.id===id); shareToLinkedIn(); }
