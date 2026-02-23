@@ -400,6 +400,8 @@ Return a SINGLE topic as valid JSON (no markdown):
 # SERIES GENERATION
 # ---------------------------------------------------------------------------
 
+_series_lock = threading.Lock()
+
 def load_series():
     if not SERIES_FILE.exists(): return []
     try: return json.loads(SERIES_FILE.read_text())
@@ -407,6 +409,16 @@ def load_series():
 
 def save_series(series_list):
     SERIES_FILE.write_text(json.dumps(series_list, indent=2))
+
+def update_series(series_id, **kwargs):
+    """Thread-safe series update. Reloads, modifies, saves under lock."""
+    with _series_lock:
+        series_list = load_series()
+        s = next((x for x in series_list if x["id"] == series_id), None)
+        if s:
+            s.update(kwargs)
+            save_series(series_list)
+        return s
 
 def generate_series_bible(topic_or_prompt, num_episodes=6):
     """Phase 1: Deep research + narrative architecture. Returns a series bible dict."""
@@ -558,17 +570,35 @@ Return ONLY the summary paragraph. No formatting, no bullet points."""
     return extract_text(data).strip()
 
 def _run_series(series_id, bible, voice_alex, voice_morgan):
-    series_list = load_series()
-    series_entry = next((s for s in series_list if s["id"] == series_id), None)
+    with _series_lock:
+        series_list = load_series()
+        series_entry = next((s for s in series_list if s["id"] == series_id), None)
     if not series_entry:
         return
 
     episodes = bible.get("episodes", [])
+    job_ids = series_entry["job_ids"]
+    series_title = series_entry["title"]
     prior_summaries = []
+    completed_count = 0
+
+    # Resolve voices once before the loop (not per-episode)
+    try:
+        client = get_elevenlabs_client()
+        voice_a_id = resolve_voice(client, voice_alex)
+        voice_b_id = resolve_voice(client, voice_morgan)
+        if not voice_a_id or not voice_b_id:
+            for jid in job_ids:
+                update_job(jid, status="error", error="Voice not found")
+            return
+    except Exception as e:
+        for jid in job_ids:
+            update_job(jid, status="error", error=f"ElevenLabs init failed: {e}")
+        return
 
     for i, ep_topic in enumerate(episodes):
         ep_num = i + 1
-        job_id = series_entry["job_ids"][i]
+        job_id = job_ids[i]
 
         try:
             update_job(job_id, status="running",
@@ -595,13 +625,6 @@ def _run_series(series_id, bible, voice_alex, voice_morgan):
             })
 
             update_job(job_id, progress=f"Episode {ep_num}/{len(episodes)}: Generating audio ({len(script)} segments)...")
-            client = get_elevenlabs_client()
-            voice_a_id = resolve_voice(client, voice_alex)
-            voice_b_id = resolve_voice(client, voice_morgan)
-            if not voice_a_id or not voice_b_id:
-                update_job(job_id, status="error", error="Voice not found")
-                continue
-
             timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
             ep_id = f"series-{series_id}-ep{ep_num}-{timestamp}"
             ep_dir = EPISODES_DIR / ep_id
@@ -611,7 +634,7 @@ def _run_series(series_id, bible, voice_alex, voice_morgan):
 
             entry = {
                 "id": ep_id,
-                "title": f"[S: {series_entry['title']}] Ep {ep_num}: {ep_topic['title']}",
+                "title": f"[S: {series_title}] Ep {ep_num}: {ep_topic['title']}",
                 "description": ep_topic.get("tension", ""),
                 "file": f"{ep_id}.mp3",
                 "file_size": dest.stat().st_size,
@@ -622,20 +645,24 @@ def _run_series(series_id, bible, voice_alex, voice_morgan):
                 "series_id": series_id,
                 "series_ep": ep_num,
             }
-            save_episode(entry)
+            save_episode(entry, skip_feed=True)
             update_job(job_id, status="done", progress=f"Episode {ep_num} complete",
                        result={"episode": entry, "sources": sources})
 
-            series_list = load_series()
-            s = next((x for x in series_list if x["id"] == series_id), None)
-            if s:
-                s["completed"] = s.get("completed", 0) + 1
-                s["episode_summaries"] = prior_summaries
-                save_series(series_list)
+            completed_count += 1
+            update_series(series_id, completed=completed_count, episode_summaries=prior_summaries)
 
         except Exception as e:
             import traceback; traceback.print_exc()
             update_job(job_id, status="error", error=str(e))
+
+    # Rebuild feed once after all episodes instead of per-episode
+    try:
+        build_feed()
+    except Exception as e:
+        print(f"Post-series feed build failed (non-fatal): {e}")
+
+    return completed_count
 
 # ---------------------------------------------------------------------------
 # CHAT
@@ -982,14 +1009,15 @@ def load_episodes():
     try: return json.loads(EPISODES_JSON.read_text())
     except: return []
 
-def save_episode(entry):
+def save_episode(entry, skip_feed=False):
     eps = load_episodes()
     eps.append(entry)
     EPISODES_JSON.write_text(json.dumps(eps, indent=2))
-    try:
-        build_feed()
-    except Exception as e:
-        print(f"Feed build failed (non-fatal): {e}")
+    if not skip_feed:
+        try:
+            build_feed()
+        except Exception as e:
+            print(f"Feed build failed (non-fatal): {e}")
 
 # ---------------------------------------------------------------------------
 # BACKGROUND WORKERS
@@ -1089,48 +1117,40 @@ def _run_chat(job_id, message, existing_topics, voice_alex, voice_morgan):
 
 def _run_create_series(series_id, topic_or_prompt, num_episodes, voice_alex, voice_morgan):
     try:
-        series_list = load_series()
-        s = next((x for x in series_list if x["id"] == series_id), None)
-        if not s: return
-
         # Phase 1: Deep research + series architecture
-        s["status"] = "researching"
-        save_series(series_list)
+        update_series(series_id, status="researching")
         bible = generate_series_bible(topic_or_prompt, num_episodes)
         episodes = bible.get("episodes", [])
+
+        if not episodes:
+            update_series(series_id, status="error", error="Bible generation returned no episodes")
+            return
 
         job_ids = []
         for ep in episodes:
             jid = create_job("series_ep", series_id=series_id, series_ep=ep["episode_number"])
             job_ids.append(jid)
 
-        series_list = load_series()
-        s = next((x for x in series_list if x["id"] == series_id), None)
-        s["episodes"] = episodes
-        s["job_ids"] = job_ids
-        s["series_bible"] = bible
-        s["status"] = "producing"
-        s["total"] = len(episodes)
-        s["completed"] = 0
-        save_series(series_list)
+        update_series(series_id,
+                      episodes=episodes, job_ids=job_ids, series_bible=bible,
+                      status="producing", total=len(episodes), completed=0)
 
         # Phase 2: Episode generation with bible context
-        _run_series(series_id, bible, voice_alex, voice_morgan)
+        completed = _run_series(series_id, bible, voice_alex, voice_morgan)
 
-        series_list = load_series()
-        s = next((x for x in series_list if x["id"] == series_id), None)
-        if s:
-            s["status"] = "done"
-            save_series(series_list)
+        # Set final status based on actual results
+        if completed == len(episodes):
+            update_series(series_id, status="done")
+        elif completed and completed > 0:
+            update_series(series_id, status="done",
+                          error=f"{len(episodes) - completed} of {len(episodes)} episodes failed")
+        else:
+            update_series(series_id, status="error",
+                          error="All episodes failed during production")
 
     except Exception as e:
         import traceback; traceback.print_exc()
-        series_list = load_series()
-        s = next((x for x in series_list if x["id"] == series_id), None)
-        if s:
-            s["status"] = "error"
-            s["error"] = str(e)
-            save_series(series_list)
+        update_series(series_id, status="error", error=str(e))
 
 # ---------------------------------------------------------------------------
 # ROUTES
@@ -1775,7 +1795,8 @@ Return ONLY a valid JSON array of exactly 10 objects, no markdown, no preamble:
 
 @app.route('/api/series', methods=['GET'])
 def api_series_list():
-    series = load_series()
+    with _series_lock:
+        series = load_series()
     return jsonify({"series": series})
 
 @app.route('/api/series', methods=['POST'])
@@ -1808,9 +1829,10 @@ def api_series_create():
         "completed": 0,
         "error": None,
     }
-    series_list = load_series()
-    series_list.append(series_entry)
-    save_series(series_list)
+    with _series_lock:
+        series_list = load_series()
+        series_list.append(series_entry)
+        save_series(series_list)
 
     threading.Thread(
         target=_run_create_series,
@@ -1822,7 +1844,8 @@ def api_series_create():
 
 @app.route('/api/series/<series_id>', methods=['GET'])
 def api_series_status(series_id):
-    series = load_series()
+    with _series_lock:
+        series = load_series()
     s = next((x for x in series if x["id"] == series_id), None)
     if not s:
         return jsonify({"error": "Series not found"}), 404
@@ -1932,6 +1955,77 @@ def api_generate():
     ).start()
     return jsonify({"success": True, "job_id": job_id, "status": "queued"})
 
+# ---------------------------------------------------------------------------
+# IN-PROCESS CRON SCHEDULER
+# ---------------------------------------------------------------------------
+# Runs morning prep (05:30 CT) and nightly trailers (22:00 CT) automatically.
+# Uses existing endpoint idempotency — safe to run from multiple workers.
+
+_scheduler_started = False
+
+def _start_cron_scheduler():
+    global _scheduler_started
+    if _scheduler_started:
+        return
+    _scheduler_started = True
+
+    import time
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo  # Python < 3.9 fallback
+
+    CT = ZoneInfo("America/Chicago")
+
+    def scheduler_loop():
+        time.sleep(30)  # Wait for app startup
+        print("[CRON] Scheduler started — morning prep at 05:30 CT, nightly trailers at 22:00 CT")
+        last_morning = None
+        last_nightly = None
+
+        while True:
+            try:
+                now_ct = datetime.now(CT)
+                today = now_ct.date().isoformat()
+
+                # Morning prep: 05:30-05:34 CT
+                if now_ct.hour == 5 and 30 <= now_ct.minute < 35 and last_morning != today:
+                    last_morning = today
+                    print(f"[CRON] Triggering morning prep at {now_ct.strftime('%H:%M CT')}")
+                    try:
+                        with app.test_client() as client:
+                            resp = client.get(f'/api/cron/morning-prep?secret={CRON_SECRET}')
+                            result = resp.get_json()
+                            print(f"[CRON] Morning prep result: {result.get('topics_cached', '?')} topics, "
+                                  f"{result.get('suggestions_cached', '?')} suggestions")
+                    except Exception as e:
+                        print(f"[CRON] Morning prep failed: {e}")
+
+                # Nightly trailers: 22:00-22:04 CT
+                if now_ct.hour == 22 and 0 <= now_ct.minute < 5 and last_nightly != today:
+                    last_nightly = today
+                    print(f"[CRON] Triggering nightly trailers at {now_ct.strftime('%H:%M CT')}")
+                    try:
+                        with app.test_client() as client:
+                            resp = client.get(f'/api/cron/nightly-trailers?secret={CRON_SECRET}')
+                            result = resp.get_json()
+                            print(f"[CRON] Nightly trailers result: queued={result.get('queued', '?')}")
+                    except Exception as e:
+                        print(f"[CRON] Nightly trailers failed: {e}")
+
+            except Exception as e:
+                print(f"[CRON] Scheduler error: {e}")
+
+            time.sleep(300)  # Check every 5 minutes
+
+    t = threading.Thread(target=scheduler_loop, daemon=True)
+    t.start()
+
+# Start scheduler when running under gunicorn (not during imports/tests)
+if os.environ.get("ANTHROPIC_API_KEY") and os.environ.get("ELEVEN_LABS_API_KEY", os.environ.get("ELEVENLABS_API_KEY")):
+    _start_cron_scheduler()
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8080))
+    _start_cron_scheduler()
     app.run(host='0.0.0.0', port=port, debug=False)
