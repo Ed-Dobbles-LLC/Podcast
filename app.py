@@ -6,6 +6,7 @@ import uuid
 from pathlib import Path
 from datetime import datetime, timezone, date, timedelta
 from flask import Flask, jsonify, request, send_from_directory, render_template
+from mutagen.mp3 import MP3
 
 app = Flask(__name__)
 
@@ -104,6 +105,8 @@ for d in [DATA_DIR, EPISODES_DIR]:
 # ---------------------------------------------------------------------------
 
 _jobs_lock = threading.Lock()
+_episodes_lock = threading.Lock()
+_production_lock = threading.Lock()
 
 def _load_jobs():
     if not JOBS_FILE.exists():
@@ -180,9 +183,10 @@ def get_production_log():
         return []
 
 def log_production():
-    log = get_production_log()
-    log.append(datetime.now(timezone.utc).isoformat())
-    PRODUCTION_LOG.write_text(json.dumps(log))
+    with _production_lock:
+        log = get_production_log()
+        log.append(datetime.now(timezone.utc).isoformat())
+        PRODUCTION_LOG.write_text(json.dumps(log))
 
 def productions_this_week():
     log = get_production_log()
@@ -310,6 +314,16 @@ def call_anthropic(messages, max_tokens=2500, use_web_search=False, model=None):
 def extract_text(data):
     return " ".join(b["text"] for b in data.get("content", []) if b.get("type") == "text").strip()
 
+def strip_markdown_fences(text):
+    """Strip markdown code fences from API response text."""
+    if "```" in text:
+        parts = text.split("```")
+        if len(parts) >= 3:
+            text = parts[1]
+            if text.startswith("json"):
+                text = text[4:]
+    return text.strip()
+
 # ---------------------------------------------------------------------------
 # TOPIC GENERATION
 # ---------------------------------------------------------------------------
@@ -338,9 +352,7 @@ def generate_topics_via_claude():
             prompt += "\n\nLIVE COMPETITIVE INTELLIGENCE (AnswerRocket):\n" + "\n\n".join(parts)
         data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=2500)
         text = extract_text(data).strip()
-        if text.startswith("```"):
-            text = text.split("```")[1]
-            if text.startswith("json"): text = text[4:]
+        text = strip_markdown_fences(text)
         return json.loads(text)[:6]
     except Exception as e:
         print(f"Topic gen failed: {e}")
@@ -377,9 +389,7 @@ Return a SINGLE topic as valid JSON (no markdown):
 
         data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=1000)
         text = extract_text(data).strip()
-        if text.startswith("```"):
-            text = text.split("```")[1]
-            if text.startswith("json"): text = text[4:]
+        text = strip_markdown_fences(text)
         topic = json.loads(text)
         topic["title"] = "[AR] " + topic["title"]
 
@@ -405,7 +415,9 @@ _series_lock = threading.Lock()
 def load_series():
     if not SERIES_FILE.exists(): return []
     try: return json.loads(SERIES_FILE.read_text())
-    except: return []
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"[LOAD_SERIES] Error: {e}")
+        return []
 
 def save_series(series_list):
     SERIES_FILE.write_text(json.dumps(series_list, indent=2))
@@ -531,9 +543,7 @@ REQUIREMENTS:
             print("[SERIES BIBLE] Generated without web search (Opus)")
 
         text = extract_text(data).strip()
-        if text.startswith("```"):
-            text = text.split("```")[1]
-            if text.startswith("json"): text = text[4:]
+        text = strip_markdown_fences(text)
         text = text.strip()
         if not text.startswith("{"):
             idx = text.find("{")
@@ -541,7 +551,16 @@ REQUIREMENTS:
                 text = text[idx:]
         bible = json.loads(text)
 
-        ep_count = len(bible.get("episodes", []))
+        # Validate required bible fields
+        if not bible.get("episodes"):
+            raise ValueError("Series bible missing 'episodes' array")
+        for i, ep in enumerate(bible["episodes"]):
+            if "title" not in ep:
+                ep["title"] = f"Episode {i + 1}"
+            if "episode_number" not in ep:
+                ep["episode_number"] = i + 1
+
+        ep_count = len(bible["episodes"])
         fact_count = len(bible.get("research_findings", {}).get("key_facts", []))
         thread_count = len(bible.get("narrative_threads", []))
         print(f"[SERIES BIBLE] {ep_count} episodes, {fact_count} research facts, {thread_count} narrative threads")
@@ -638,6 +657,7 @@ def _run_series(series_id, bible, voice_alex, voice_morgan):
                 "description": ep_topic.get("tension", ""),
                 "file": f"{ep_id}.mp3",
                 "file_size": dest.stat().st_size,
+                "duration": round(get_mp3_duration(dest)),
                 "depth": "Standard",
                 "is_trailer": False,
                 "sources": sources,
@@ -696,9 +716,7 @@ Tone: sharp, executive, zero fluff."""
     }], max_tokens=1000)
 
     text = extract_text(data).strip()
-    if text.startswith("```"):
-        text = text.split("```")[1]
-        if text.startswith("json"): text = text[4:]
+    text = strip_markdown_fences(text)
     return json.loads(text)
 
 # ---------------------------------------------------------------------------
@@ -865,9 +883,7 @@ SOURCES: source1, source2, source3"""
             script_text = parts[0].strip()
             sources = [s.strip() for s in parts[1].strip().split(",") if s.strip()]
 
-        if "```" in script_text:
-            script_text = script_text.split("```")[1]
-            if script_text.startswith("json"): script_text = script_text[4:]
+        script_text = strip_markdown_fences(script_text)
 
         script = json.loads(script_text.strip())
         print(f"[SCRIPT OK] {len(script)} segments generated")
@@ -923,12 +939,18 @@ def build_feed():
     for ep in feed_eps:
         audio_url = f"{BASE_URL}/episodes/{esc(ep['file'])}"
         file_size = ep.get("file_size", 0)
+        dur = ep.get("duration", 0)
+        if not dur:
+            mp3_path = EPISODES_DIR / ep.get("file", "")
+            if mp3_path.exists():
+                dur = round(get_mp3_duration(mp3_path))
         try:
             dt = datetime.fromisoformat(ep.get("published", ""))
             pub_rfc = dt.strftime("%a, %d %b %Y %H:%M:%S +0000")
         except Exception:
             pub_rfc = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
 
+        dur_tag = f"\n      <itunes:duration>{dur}</itunes:duration>" if dur else ""
         items.append(f"""    <item>
       <title>{esc(ep.get('title', 'Intelligence Briefing'))}</title>
       <description>{esc(ep.get('description', ''))}</description>
@@ -936,7 +958,7 @@ def build_feed():
       <guid isPermaLink="false">{esc(ep.get('id', audio_url))}</guid>
       <pubDate>{pub_rfc}</pubDate>
       <itunes:title>{esc(ep.get('title', 'Intelligence Briefing'))}</itunes:title>
-      <itunes:summary>{esc(ep.get('description', ''))}</itunes:summary>
+      <itunes:summary>{esc(ep.get('description', ''))}</itunes:summary>{dur_tag}
       <itunes:explicit>no</itunes:explicit>
     </item>""")
 
@@ -1057,6 +1079,13 @@ def generate_episode_audio(client, script, ep_dir, voice_a_id, voice_b_id):
                 out.write(_strip_mp3_info_header(f.read_bytes()))
     return final
 
+def get_mp3_duration(path):
+    """Return MP3 duration in seconds, or 0 on failure."""
+    try:
+        return MP3(str(path)).info.length
+    except Exception:
+        return 0
+
 # ---------------------------------------------------------------------------
 # EPISODES
 # ---------------------------------------------------------------------------
@@ -1064,12 +1093,15 @@ def generate_episode_audio(client, script, ep_dir, voice_a_id, voice_b_id):
 def load_episodes():
     if not EPISODES_JSON.exists(): return []
     try: return json.loads(EPISODES_JSON.read_text())
-    except: return []
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"[LOAD_EPISODES] Error: {e}")
+        return []
 
 def save_episode(entry, skip_feed=False):
-    eps = load_episodes()
-    eps.append(entry)
-    EPISODES_JSON.write_text(json.dumps(eps, indent=2))
+    with _episodes_lock:
+        eps = load_episodes()
+        eps.append(entry)
+        EPISODES_JSON.write_text(json.dumps(eps, indent=2))
     if not skip_feed:
         try:
             build_feed()
@@ -1113,6 +1145,7 @@ def _run_generate(job_id, topic_data, depth, voice_alex, voice_morgan, is_traile
             "description": topic_data.get("tension", ""),
             "file": f"{ep_id}.mp3",
             "file_size": dest.stat().st_size,
+            "duration": round(get_mp3_duration(dest)),
             "depth": label,
             "is_trailer": is_trailer,
             "sources": sources,
@@ -1158,6 +1191,7 @@ def _run_chat(job_id, message, existing_topics, voice_alex, voice_morgan):
             "description": topic["tension"],
             "file": f"{ep_id}.mp3",
             "file_size": dest.stat().st_size,
+            "duration": round(get_mp3_duration(dest)),
             "depth": "Standard",
             "is_trailer": False,
             "sources": sources,
@@ -1235,20 +1269,20 @@ def api_engagement_log():
 
 @app.route('/api/episodes/<ep_id>', methods=['DELETE'])
 def api_episode_delete(ep_id):
-    eps = load_episodes()
-    target = next((e for e in eps if e.get("id") == ep_id), None)
-    if not target:
-        return jsonify({"success": False, "error": "Episode not found"}), 404
+    with _episodes_lock:
+        eps = load_episodes()
+        target = next((e for e in eps if e.get("id") == ep_id), None)
+        if not target:
+            return jsonify({"success": False, "error": "Episode not found"}), 404
+        eps = [e for e in eps if e.get("id") != ep_id]
+        EPISODES_JSON.write_text(json.dumps(eps, indent=2))
 
-    eps = [e for e in eps if e.get("id") != ep_id]
-    EPISODES_JSON.write_text(json.dumps(eps, indent=2))
-
-    mp3_path = EPISODES_DIR / target.get("file", "")
-    if mp3_path.exists():
-        try:
-            mp3_path.unlink()
-        except Exception as e:
-            print(f"[DELETE] Could not remove file {mp3_path}: {e}")
+    filename = Path(target.get("file", "")).name
+    mp3_path = EPISODES_DIR / filename
+    try:
+        mp3_path.unlink(missing_ok=True)
+    except Exception as e:
+        print(f"[DELETE] Could not remove file {mp3_path}: {e}")
 
     seg_dir = EPISODES_DIR / ep_id
     if seg_dir.is_dir():
@@ -1511,9 +1545,7 @@ Return ONLY a valid JSON array of exactly 10 objects, no markdown, no preamble:
             data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=3000, use_web_search=False)
 
         text = extract_text(data).strip()
-        if "```" in text:
-            text = text.split("```")[1]
-            if text.startswith("json"): text = text[4:]
+        text = strip_markdown_fences(text)
         bracket = text.find("[")
         if bracket > 0:
             text = text[bracket:]
@@ -1629,9 +1661,7 @@ Return ONLY a valid JSON array of exactly 6 objects, no markdown:
         data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=3000, use_web_search=False)
 
     text = extract_text(data).strip()
-    if text.startswith("```"):
-        text = text.split("```")[1]
-        if text.startswith("json"): text = text[4:]
+    text = strip_markdown_fences(text)
     trailer_topics = json.loads(text)[:6]
 
     job_ids = []
@@ -1815,9 +1845,7 @@ Return ONLY a valid JSON array of exactly 10 objects, no markdown, no preamble:
             data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=3000, use_web_search=False)
 
         text = extract_text(data).strip()
-        if "```" in text:
-            text = text.split("```")[1]
-            if text.startswith("json"): text = text[4:]
+        text = strip_markdown_fences(text)
         bracket = text.find("[")
         if bracket > 0:
             text = text[bracket:]
@@ -1861,7 +1889,10 @@ def api_series_create():
     data = request.json or {}
     topic_data = data.get("topic_data")
     topic_str = data.get("topic", "").strip()
-    num_episodes = int(data.get("num_episodes", 6))
+    try:
+        num_episodes = max(1, min(12, int(data.get("num_episodes", 6))))
+    except (ValueError, TypeError):
+        return jsonify({"success": False, "error": "Invalid num_episodes"}), 400
     voice_alex = data.get("voice_alex", "Chris - Charming, Down-to-Earth")
     voice_morgan = data.get("voice_morgan", "Matilda - Knowledgable, Professional")
 
@@ -1962,8 +1993,8 @@ def api_topics():
 
 @app.route('/api/chat', methods=['POST'])
 def api_chat():
-    data = request.json
-    message = data.get("message", "").strip()
+    data = request.json or {}
+    message = data.get("message", "").strip()[:5000]
     existing_topics = data.get("existing_topics", [])
     voice_alex = data.get("voice_alex", "Chris - Charming, Down-to-Earth")
     voice_morgan = data.get("voice_morgan", "Matilda - Knowledgable, Professional")
@@ -1985,7 +2016,7 @@ def api_chat():
 
 @app.route('/api/generate', methods=['POST'])
 def api_generate():
-    data = request.json
+    data = request.json or {}
     topic_data = data.get("topic_data")
     topic_title = data.get("topic", "").strip()
     depth = data.get("depth", "standard")
@@ -1996,6 +2027,8 @@ def api_generate():
 
     if not topic_data and not topic_title:
         return jsonify({"success": False, "error": "Topic required"})
+    if not ANTHROPIC_API_KEY:
+        return jsonify({"success": False, "error": "Anthropic API key not configured"})
     if not ELEVEN_API_KEY:
         return jsonify({"success": False, "error": "ElevenLabs API key not configured"})
 
