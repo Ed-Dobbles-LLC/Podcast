@@ -985,6 +985,51 @@ def generate_audio_bytes(client, text, voice_id):
         voice_id=voice_id, text=text,
         model_id="eleven_turbo_v2_5", output_format="mp3_44100_128"))
 
+def _strip_mp3_info_header(data):
+    """Strip Xing/Info VBR header frame from MP3 data for clean concatenation."""
+    offset = 0
+    if data[:3] == b'ID3':
+        if len(data) < 10:
+            return data
+        size = (data[6] << 21) | (data[7] << 14) | (data[8] << 7) | data[9]
+        offset = 10 + size
+    while offset < len(data) - 4:
+        if data[offset] == 0xFF and (data[offset + 1] & 0xE0) == 0xE0:
+            header = int.from_bytes(data[offset:offset + 4], 'big')
+            version_bits = (header >> 19) & 3
+            layer_bits = (header >> 17) & 3
+            bitrate_idx = (header >> 12) & 0xF
+            srate_idx = (header >> 10) & 3
+            padding = (header >> 9) & 1
+            if version_bits in (0, 1) or layer_bits == 0 or bitrate_idx in (0, 15) or srate_idx == 3:
+                offset += 1
+                continue
+            bitrates = {
+                (3, 1): [0,32,40,48,56,64,80,96,112,128,160,192,224,256,320,0],
+                (3, 2): [0,32,48,56,64,80,96,112,128,160,192,224,256,320,384,0],
+                (3, 3): [0,32,64,96,128,160,192,224,256,288,320,352,384,416,448,0],
+            }
+            srates = {3: [44100,48000,32000], 2: [22050,24000,16000], 0: [11025,12000,8000]}
+            br_table = bitrates.get((version_bits, layer_bits))
+            sr_table = srates.get(version_bits)
+            if not br_table or not sr_table:
+                offset += 1
+                continue
+            bitrate = br_table[bitrate_idx] * 1000
+            srate = sr_table[srate_idx]
+            if layer_bits == 1:
+                frame_len = (144 * bitrate // srate) + padding
+            elif layer_bits == 3:
+                frame_len = (12 * bitrate // srate + padding) * 4
+            else:
+                frame_len = (144 * bitrate // srate) + padding
+            frame_data = data[offset:offset + frame_len]
+            if b'Xing' in frame_data or b'Info' in frame_data or b'VBRI' in frame_data:
+                return data[:offset] + data[offset + frame_len:]
+            return data
+        offset += 1
+    return data
+
 def generate_episode_audio(client, script, ep_dir, voice_a_id, voice_b_id):
     ep_dir = Path(ep_dir)
     ep_dir.mkdir(parents=True, exist_ok=True)
@@ -995,9 +1040,21 @@ def generate_episode_audio(client, script, ep_dir, voice_a_id, voice_b_id):
         p.write_bytes(generate_audio_bytes(client, seg["text"], vid))
         parts.append(p)
     final = ep_dir / "episode.mp3"
-    with open(final, "wb") as out:
-        for f in parts:
-            out.write(f.read_bytes())
+    try:
+        import subprocess
+        list_file = ep_dir / "concat.txt"
+        list_file.write_text("\n".join(f"file '{p.name}'" for p in parts))
+        subprocess.run(
+            ["ffmpeg", "-y", "-f", "concat", "-safe", "0",
+             "-i", str(list_file), "-c", "copy", str(final)],
+            check=True, capture_output=True, cwd=str(ep_dir))
+        list_file.unlink(missing_ok=True)
+        print(f"[AUDIO] Concatenated {len(parts)} segments with ffmpeg")
+    except (FileNotFoundError, subprocess.CalledProcessError) as e:
+        print(f"[AUDIO] ffmpeg unavailable ({e}), using stripped concatenation")
+        with open(final, "wb") as out:
+            for f in parts:
+                out.write(_strip_mp3_info_header(f.read_bytes()))
     return final
 
 # ---------------------------------------------------------------------------

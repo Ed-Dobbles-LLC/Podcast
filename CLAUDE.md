@@ -18,6 +18,7 @@ An AI-powered executive podcast platform hosted on Railway. It generates 5-10 mi
   - `EDITORIAL_MODEL` = `claude-sonnet-4-20250514` -- used for topic generation, chat-to-topic, suggestions, episode summaries (cost-effective)
 - **Data persistence:** Railway volume mounted at `~/Intelligence-Briefings/`
 - **Frontend:** Two single-page HTML/CSS/JS templates (production console + public listener)
+- **Audio concatenation:** ffmpeg (installed in Docker image) -- concatenates per-segment MP3s into episode files with correct duration headers. Pure-Python fallback strips Xing/Info VBR headers if ffmpeg unavailable.
 - **Process manager:** gunicorn gthread workers, 300s timeout (Procfile + Dockerfile both define this)
 
 ## Key Files
