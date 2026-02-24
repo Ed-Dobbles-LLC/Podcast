@@ -571,8 +571,14 @@ REQUIREMENTS:
 
 
 def summarize_episode_script(script, episode_title, episode_number):
-    """Generate a concise summary of a produced episode for series continuity."""
-    script_text = "\n".join(f"{s['host']}: {s['text']}" for s in script[:20])
+    """Generate a concise summary of a produced episode for series continuity.
+    Includes all segments for short scripts; for long ones, keeps first 12 + last 6
+    to capture opening context AND the critical REFRAME/closing sections."""
+    if len(script) <= 20:
+        selected = script
+    else:
+        selected = script[:12] + script[-6:]
+    script_text = "\n".join(f"{s['host']}: {s['text']}" for s in selected)
 
     prompt = f"""Summarize this podcast episode in 4-6 sentences for use as context when writing subsequent episodes in the same series.
 
@@ -588,18 +594,28 @@ Return ONLY the summary paragraph. No formatting, no bullet points."""
     data = call_anthropic([{"role": "user", "content": prompt}], max_tokens=500, model=EDITORIAL_MODEL)
     return extract_text(data).strip()
 
-def _run_series(series_id, bible, voice_alex, voice_morgan):
+def _run_series(series_id, bible, voice_alex, voice_morgan, retry_episodes=None):
+    """Produce episodes for a series. If retry_episodes is set (list of 1-based ep numbers),
+    only those episodes are re-produced; completed episodes' summaries are loaded from series state."""
     with _series_lock:
         series_list = load_series()
         series_entry = next((s for s in series_list if s["id"] == series_id), None)
     if not series_entry:
-        return
+        return 0
 
     episodes = bible.get("episodes", [])
     job_ids = series_entry["job_ids"]
     series_title = series_entry["title"]
-    prior_summaries = []
-    completed_count = 0
+    completed_count = series_entry.get("completed", 0) if retry_episodes else 0
+
+    # For retries, seed prior_summaries from already-completed episodes
+    if retry_episodes:
+        existing_summaries = series_entry.get("episode_summaries", [])
+        prior_summaries = [s for s in existing_summaries
+                           if s["episode_number"] not in retry_episodes]
+        prior_summaries.sort(key=lambda s: s["episode_number"])
+    else:
+        prior_summaries = []
 
     # Resolve voices once before the loop (not per-episode)
     try:
@@ -608,25 +624,35 @@ def _run_series(series_id, bible, voice_alex, voice_morgan):
         voice_b_id = resolve_voice(client, voice_morgan)
         if not voice_a_id or not voice_b_id:
             for jid in job_ids:
-                update_job(jid, status="error", error="Voice not found")
-            return
+                if retry_episodes is None or True:
+                    update_job(jid, status="error", error="Voice not found")
+            return 0
     except Exception as e:
         for jid in job_ids:
             update_job(jid, status="error", error=f"ElevenLabs init failed: {e}")
-        return
+        return 0
+
+    failed_episodes = []
 
     for i, ep_topic in enumerate(episodes):
         ep_num = i + 1
         job_id = job_ids[i]
 
+        # In retry mode, skip episodes that aren't in the retry set
+        if retry_episodes and ep_num not in retry_episodes:
+            continue
+
         try:
             update_job(job_id, status="running",
                        progress=f"Episode {ep_num}/{len(episodes)}: Writing script with series context...")
 
+            # Build prior summaries for this episode (all summaries from episodes < ep_num)
+            ep_prior = [s for s in prior_summaries if s["episode_number"] < ep_num]
+
             script, sources = generate_grounded_script(
                 ep_topic, depth="standard",
                 series_bible=bible,
-                prior_episode_summaries=prior_summaries
+                prior_episode_summaries=ep_prior
             )
             log_production()
 
@@ -637,11 +663,14 @@ def _run_series(series_id, bible, voice_alex, voice_morgan):
             except Exception:
                 summary = f"{script[0]['text'][:300]}... {script[-1]['text'][:300]}"
 
+            # Add/replace this episode's summary in prior_summaries
+            prior_summaries = [s for s in prior_summaries if s["episode_number"] != ep_num]
             prior_summaries.append({
                 "episode_number": ep_num,
                 "title": ep_topic["title"],
                 "summary": summary
             })
+            prior_summaries.sort(key=lambda s: s["episode_number"])
 
             update_job(job_id, progress=f"Episode {ep_num}/{len(episodes)}: Generating audio ({len(script)} segments)...")
             timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -675,6 +704,10 @@ def _run_series(series_id, bible, voice_alex, voice_morgan):
         except Exception as e:
             import traceback; traceback.print_exc()
             update_job(job_id, status="error", error=str(e))
+            failed_episodes.append({"episode_number": ep_num, "error": str(e)})
+
+    # Persist which episodes failed for retry tracking
+    update_series(series_id, failed_episodes=failed_episodes)
 
     # Rebuild feed once after all episodes instead of per-episode
     try:
@@ -807,7 +840,7 @@ SERIES EPISODE RULES:
 - End with a bridge that creates genuine anticipation for the next episode
 """
 
-    seg_min = {"executive": 10, "standard": 16, "deep": 24}.get(depth, 16)
+    seg_min = {"executive": 18, "standard": 20, "deep": 24}.get(depth, 20)
 
     prompt = f"""You are writing a premium executive intelligence podcast script. This is NOT generic business content.
 
@@ -854,8 +887,8 @@ STRUCTURE (each section gets {max(2, seg_min//6)}-{max(3, seg_min//4)} segments)
 6. THE MONDAY MORNING — REQUIRED closer. Morgan or Alex directly addresses the listener: "Here's the one question to bring to your next leadership meeting..." or "The email you should send Monday is..." or "The budget line item you should challenge this quarter is..." Be SPECIFIC and ACTIONABLE. Not a summary — a concrete next move.
 7. THE REFRAME — Final 1-2 segments. One idea that permanently changes how they see this topic. Not a recap. A new lens. End on a line that lingers.
 
-MINIMUM: {seg_min} segments total. Count before returning. Add more if under.
-Each segment: 3-5 substantial spoken sentences. No one-liners.
+MINIMUM: {seg_min} segments total. The finished episode MUST be at least 5 minutes of audio. Count before returning. Add more if under.
+Each segment: 4-6 substantial spoken sentences. No one-liners. Each segment should be ~20 seconds of spoken audio.
 
 Return ONLY a valid JSON array, no markdown, no preamble:
 [{{"host": "Alex", "text": "..."}}, {{"host": "Morgan", "text": "..."}}, ...]
@@ -865,13 +898,13 @@ SOURCES: source1, source2, source3"""
 
     try:
         try:
-            script_tokens = 5000 if series_bible else 4000
+            script_tokens = 6000 if series_bible else 5000
             data = call_anthropic([{"role": "user", "content": prompt}],
                                   max_tokens=script_tokens, use_web_search=True, model=SCRIPT_MODEL)
             print("[SCRIPT] Web search enabled, using Opus")
         except Exception as ws_err:
             print(f"[SCRIPT] Web search failed ({ws_err}), falling back to no-search")
-            script_tokens = 5000 if series_bible else 4000
+            script_tokens = 6000 if series_bible else 5000
             data = call_anthropic([{"role": "user", "content": prompt}],
                                   max_tokens=script_tokens, use_web_search=False, model=SCRIPT_MODEL)
         full_text = extract_text(data)
@@ -898,18 +931,24 @@ SOURCES: source1, source2, source3"""
         matters = topic.get('why_it_matters', 'This has direct implications for how you allocate capital and talent.')
         mistake = topic.get('common_mistake', 'They optimize for visibility over actual impact, which means the real exposure never gets addressed.')
         return [
-            {"host": "Alex", "text": f"Let's start with something most executives in this space already know but haven't fully acted on. {title}. The question isn't whether this is real - it's whether you're positioned correctly when it hits your organization."},
-            {"host": "Morgan", "text": f"And the core tension is this: {tension} That's the uncomfortable part. Because it means the conventional playbook - the one that got most leaders to where they are - may actually be the wrong tool for what's coming."},
-            {"host": "Alex", "text": f"Here's why this matters at the strategic level right now. {matters} And the window to get ahead of this is shorter than most leadership teams have internalized."},
-            {"host": "Morgan", "text": "Let's ground this in what's actually happening. The organizations that are navigating this well aren't the ones with the biggest budgets or the most sophisticated tech stacks. They're the ones that identified the structural cause early and built around it rather than against it."},
-            {"host": "Alex", "text": "The structural cause is key. Most conversations about this topic focus on symptoms - the visible friction, the metrics that are off, the talent gaps. But the mechanism underneath is an incentive misalignment that organizations keep papering over with process instead of fixing at the root."},
-            {"host": "Morgan", "text": f"Which brings us to what sophisticated leaders consistently get wrong. {mistake} And the irony is that the leaders who are most experienced - who've solved hard problems before - are often the most prone to this mistake because their pattern recognition is calibrated to a different era."},
-            {"host": "Alex", "text": f"The first question worth sitting with: {sq[0] if sq else 'Where in your current approach are you optimizing for the appearance of progress rather than the underlying condition?'} That's not a rhetorical question. It has a specific answer in your organization right now."},
-            {"host": "Morgan", "text": f"And the second: {sq[1] if len(sq) > 1 else 'What would you do differently if you knew your current approach had a 24-month shelf life?'} Because the executives who are three moves ahead on this aren't smarter - they just asked that question earlier."},
-            {"host": "Alex", "text": f"If there's a third lever worth examining: {sq[2] if len(sq) > 2 else 'How are you measuring whether your governance and your actual exposure are in sync?'} The answer tells you more about your real risk posture than any framework document."},
-            {"host": "Morgan", "text": "Here's the practical implication. The next time this comes up - whether it's a board review, a budget cycle, or a talent discussion - the question isn't 'are we doing enough.' The question is 'are we working on the right thing.' Those are very different questions with very different answers."},
-            {"host": "Alex", "text": "So here's your Monday morning move. Before your next leadership meeting, ask one question: where in our current approach are we optimizing for the appearance of progress rather than the underlying condition? Write down the answer. If it makes you uncomfortable, you've found the real work."},
-            {"host": "Morgan", "text": "The executives who navigate this well aren't the ones with the best data or the biggest teams. They're the ones who identified where their mental model was wrong and updated it before the market forced them to. That's the actual competitive advantage here."},
+            {"host": "Alex", "text": f"Let's start with something most executives in this space already know but haven't fully acted on. {title}. The question isn't whether this is real - it's whether you're positioned correctly when it hits your organization. And I want to be precise about what 'positioned correctly' actually means here, because the gap between thinking you're ready and being ready is where most of the damage happens."},
+            {"host": "Morgan", "text": f"And the core tension is this: {tension} That's the uncomfortable part. Because it means the conventional playbook - the one that got most leaders to where they are - may actually be the wrong tool for what's coming. I've watched three separate leadership teams in the last year run the standard play and wonder why it didn't land the way it used to."},
+            {"host": "Alex", "text": f"Here's why this matters at the strategic level right now. {matters} And the window to get ahead of this is shorter than most leadership teams have internalized. The data is unambiguous on the timing - organizations that moved early on similar structural shifts captured disproportionate value, and the laggards spent years playing catch-up at three times the cost."},
+            {"host": "Morgan", "text": "Let's ground this in what's actually happening. The organizations that are navigating this well aren't the ones with the biggest budgets or the most sophisticated tech stacks. They're the ones that identified the structural cause early and built around it rather than against it. There's a pattern here that's worth naming explicitly."},
+            {"host": "Alex", "text": "The pattern is this: the companies getting it right all made one counterintuitive move. They stopped trying to optimize their existing approach and instead asked whether the approach itself was still valid. That's a fundamentally different question, and it leads to fundamentally different capital allocation decisions."},
+            {"host": "Morgan", "text": "And that distinction matters because most organizations are still running the optimization playbook. They're making the current thing faster, cheaper, more efficient. But when the underlying dynamics have shifted, optimizing the wrong thing just gets you to the wrong destination more quickly. I'd rather be slow and pointed in the right direction."},
+            {"host": "Alex", "text": "The structural cause is key. Most conversations about this topic focus on symptoms - the visible friction, the metrics that are off, the talent gaps. But the mechanism underneath is an incentive misalignment that organizations keep papering over with process instead of fixing at the root. And the incentive misalignment is specific: the people who benefit from the status quo are the same people tasked with changing it."},
+            {"host": "Morgan", "text": f"Which brings us to what sophisticated leaders consistently get wrong. {mistake} And the irony is that the leaders who are most experienced - who've solved hard problems before - are often the most prone to this mistake because their pattern recognition is calibrated to a different era. The best instincts from 2018 are actively misleading in 2026."},
+            {"host": "Alex", "text": "That's a sharp point and I want to push back slightly. Experience isn't the liability here - misapplied experience is. The leaders I've seen navigate this successfully are the ones who consciously audit which of their assumptions are still load-bearing and which ones have become decorative. That's a discipline, not a talent."},
+            {"host": "Morgan", "text": "Fair. And that audit is something most organizations never do formally. It's assumed. Which means the assumptions that need challenging the most are exactly the ones that never get examined. The organizational immune system protects them."},
+            {"host": "Alex", "text": f"The first question worth sitting with: {sq[0] if sq else 'Where in your current approach are you optimizing for the appearance of progress rather than the underlying condition?'} That's not a rhetorical question. It has a specific answer in your organization right now. And if you're honest about it, the answer will probably surprise you."},
+            {"host": "Morgan", "text": f"And the second: {sq[1] if len(sq) > 1 else 'What would you do differently if you knew your current approach had a 24-month shelf life?'} Because the executives who are three moves ahead on this aren't smarter - they just asked that question earlier. They ran the scenario planning that everyone else skipped because the current number still looked okay."},
+            {"host": "Alex", "text": f"If there's a third lever worth examining: {sq[2] if len(sq) > 2 else 'How are you measuring whether your governance and your actual exposure are in sync?'} The answer tells you more about your real risk posture than any framework document. And here's the uncomfortable truth - if you can't answer that question in under 30 seconds, the gap is bigger than you think."},
+            {"host": "Morgan", "text": "Here's the practical implication. The next time this comes up - whether it's a board review, a budget cycle, or a talent discussion - the question isn't 'are we doing enough.' The question is 'are we working on the right thing.' Those are very different questions with very different answers. And the second question is the one that doesn't get asked because it threatens existing commitments."},
+            {"host": "Alex", "text": "So here's your Monday morning move. Before your next leadership meeting, ask one question: where in our current approach are we optimizing for the appearance of progress rather than the underlying condition? Write down the answer. If it makes you uncomfortable, you've found the real work. Then send that email. Name the gap. Don't propose the solution yet - just name what you're seeing."},
+            {"host": "Morgan", "text": "And I'd add one thing to Alex's homework. After you name the gap, pay attention to who in the room wants to close the conversation quickly versus who wants to dig in. That reaction pattern tells you everything about whether your organization can actually adapt or whether it will just perform adaptation. That's the real diagnostic."},
+            {"host": "Alex", "text": "That's the signal to watch for. The organizations that successfully navigate structural shifts aren't the ones with the best strategy decks. They're the ones where the leadership team can sit with discomfort long enough to reach a genuinely new conclusion instead of recycling a comfortable old one."},
+            {"host": "Morgan", "text": "The executives who navigate this well aren't the ones with the best data or the biggest teams. They're the ones who identified where their mental model was wrong and updated it before the market forced them to. That's the actual competitive advantage here - the willingness to be wrong fast rather than wrong slowly."},
             {"host": "Alex", "text": f"Leave you with this reframe: {title} isn't a problem to solve. It's a condition to position around. The organizations that treat it as solvable will spend the next three years in reactive mode. The ones that treat it as structural reality will spend that same time building asymmetric advantage. That's the briefing."}
         ], []
 
@@ -1242,6 +1281,59 @@ def _run_create_series(series_id, topic_or_prompt, num_episodes, voice_alex, voi
     except Exception as e:
         import traceback; traceback.print_exc()
         update_series(series_id, status="error", error=str(e))
+
+
+def _run_retry_series(series_id, failed_ep_numbers, voice_alex, voice_morgan):
+    """Retry only the failed episodes of an existing series."""
+    try:
+        with _series_lock:
+            series_list = load_series()
+            series_entry = next((s for s in series_list if s["id"] == series_id), None)
+        if not series_entry:
+            return
+
+        bible = series_entry.get("series_bible")
+        if not bible:
+            update_series(series_id, status="error", error="No series bible found for retry")
+            return
+
+        update_series(series_id, status="producing", error=None, failed_episodes=[])
+
+        # Create new jobs for failed episodes, update job_ids list
+        job_ids = list(series_entry["job_ids"])
+        episodes = bible.get("episodes", [])
+        for ep_num in failed_ep_numbers:
+            idx = ep_num - 1
+            if 0 <= idx < len(episodes):
+                jid = create_job("series_ep", series_id=series_id, series_ep=ep_num)
+                job_ids[idx] = jid
+        update_series(series_id, job_ids=job_ids)
+
+        completed = _run_series(series_id, bible, voice_alex, voice_morgan,
+                                retry_episodes=failed_ep_numbers)
+
+        # Determine final status
+        total = len(episodes)
+        # Count all completed jobs (prior successes + new successes)
+        all_done = 0
+        for jid in job_ids:
+            j = get_job(jid)
+            if j and j.get("status") == "done":
+                all_done += 1
+
+        if all_done == total:
+            update_series(series_id, status="done", completed=all_done, error=None)
+        elif all_done > 0:
+            update_series(series_id, status="done", completed=all_done,
+                          error=f"{total - all_done} of {total} episodes still failed")
+        else:
+            update_series(series_id, status="error",
+                          error="All retried episodes failed")
+
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        update_series(series_id, status="error", error=f"Retry failed: {e}")
+
 
 # ---------------------------------------------------------------------------
 # ROUTES
@@ -1930,6 +2022,66 @@ def api_series_create():
 
     return jsonify({"success": True, "series_id": series_id, "title": series_title})
 
+@app.route('/api/series/<series_id>', methods=['DELETE'])
+def api_series_delete(series_id):
+    """Delete a series: remove series entry, its episodes, audio files, segment dirs, and jobs."""
+    with _series_lock:
+        series_list = load_series()
+        target = next((s for s in series_list if s["id"] == series_id), None)
+        if not target:
+            return jsonify({"success": False, "error": "Series not found"}), 404
+        series_list = [s for s in series_list if s["id"] != series_id]
+        save_series(series_list)
+
+    # Clean up associated episodes and their files
+    deleted_episodes = 0
+    with _episodes_lock:
+        eps = load_episodes()
+        series_eps = [e for e in eps if e.get("series_id") == series_id]
+        remaining_eps = [e for e in eps if e.get("series_id") != series_id]
+        if len(series_eps) > 0:
+            EPISODES_JSON.write_text(json.dumps(remaining_eps, indent=2))
+
+    for ep in series_eps:
+        filename = Path(ep.get("file", "")).name
+        mp3_path = EPISODES_DIR / filename
+        try:
+            mp3_path.unlink(missing_ok=True)
+        except Exception as e:
+            print(f"[SERIES DELETE] Could not remove file {mp3_path}: {e}")
+        seg_dir = EPISODES_DIR / ep["id"]
+        if seg_dir.is_dir():
+            try:
+                shutil.rmtree(seg_dir)
+            except Exception as e:
+                print(f"[SERIES DELETE] Could not remove dir {seg_dir}: {e}")
+        deleted_episodes += 1
+
+    # Clean up associated jobs
+    job_ids = target.get("job_ids", [])
+    if job_ids:
+        with _jobs_lock:
+            jobs = _load_jobs()
+            for jid in job_ids:
+                jobs.pop(jid, None)
+            _save_jobs(jobs)
+
+    # Rebuild feed
+    try:
+        build_feed()
+    except Exception as e:
+        print(f"[SERIES DELETE] Feed rebuild failed (non-fatal): {e}")
+
+    print(f"[SERIES DELETE] Removed series {series_id}: {target.get('title', '')}, "
+          f"{deleted_episodes} episodes, {len(job_ids)} jobs")
+    return jsonify({
+        "success": True,
+        "deleted": series_id,
+        "title": target.get("title", ""),
+        "episodes_removed": deleted_episodes,
+        "jobs_removed": len(job_ids),
+    })
+
 @app.route('/api/series/<series_id>', methods=['GET'])
 def api_series_status(series_id):
     with _series_lock:
@@ -1951,6 +2103,52 @@ def api_series_status(series_id):
             })
         s["job_statuses"] = job_statuses
     return jsonify(s)
+
+@app.route('/api/series/<series_id>/retry', methods=['POST'])
+def api_series_retry(series_id):
+    """Retry failed episodes in an existing series. Re-uses the stored bible and
+    prior episode summaries; only re-produces episodes whose jobs are in 'error' state."""
+    with _series_lock:
+        series_list = load_series()
+        s = next((x for x in series_list if x["id"] == series_id), None)
+    if not s:
+        return jsonify({"success": False, "error": "Series not found"}), 404
+
+    if s.get("status") == "producing":
+        return jsonify({"success": False, "error": "Series is currently producing — wait for it to finish"}), 409
+
+    if not s.get("series_bible"):
+        return jsonify({"success": False, "error": "No series bible stored — cannot retry"}), 400
+
+    if not s.get("job_ids"):
+        return jsonify({"success": False, "error": "No episode jobs found for this series"}), 400
+
+    # Find which episodes failed
+    failed_ep_numbers = []
+    for i, jid in enumerate(s["job_ids"]):
+        j = get_job(jid)
+        if j and j.get("status") == "error":
+            failed_ep_numbers.append(i + 1)
+
+    if not failed_ep_numbers:
+        return jsonify({"success": False, "error": "No failed episodes to retry — all episodes completed successfully"})
+
+    data = request.json or {}
+    voice_alex = data.get("voice_alex", "Chris - Charming, Down-to-Earth")
+    voice_morgan = data.get("voice_morgan", "Matilda - Knowledgable, Professional")
+
+    threading.Thread(
+        target=_run_retry_series,
+        args=(series_id, failed_ep_numbers, voice_alex, voice_morgan),
+        daemon=True
+    ).start()
+
+    return jsonify({
+        "success": True,
+        "series_id": series_id,
+        "retrying_episodes": failed_ep_numbers,
+        "total_retrying": len(failed_ep_numbers),
+    })
 
 # --- Core ---
 
