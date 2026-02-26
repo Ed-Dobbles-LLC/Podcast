@@ -96,6 +96,46 @@ WEEKLY_CAP = 50
 
 BASE_URL = os.environ.get("BASE_URL", "https://intelligence-briefings-production.up.railway.app")
 
+# --- Cost tracking (fire-and-forget) ---
+_ANTHROPIC_PRICING = {
+    "claude-opus-4-20250514": {"input": 15.0, "output": 75.0},
+    "claude-sonnet-4-20250514": {"input": 3.0, "output": 15.0},
+    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0},
+    "claude-opus-4-6": {"input": 15.0, "output": 75.0},
+}
+
+def _calc_anthropic_cost(model, input_tokens, output_tokens):
+    """Calculate cost in USD from token counts."""
+    pricing = _ANTHROPIC_PRICING.get(model, {"input": 3.0, "output": 15.0})
+    return (input_tokens * pricing["input"] / 1_000_000) + (output_tokens * pricing["output"] / 1_000_000)
+
+def _log_api_cost(provider, model, input_tokens, output_tokens, total_cost, latency_ms, tool_name):
+    """Fire-and-forget cost logging to centralized tracker."""
+    def _post():
+        try:
+            api_url = os.environ.get("COST_TRACKER_API_URL")
+            if not api_url:
+                return
+            import urllib.request as _req
+            payload = json.dumps({
+                "provider": provider, "model": model,
+                "input_tokens": input_tokens, "output_tokens": output_tokens,
+                "total_cost": total_cost,
+                "latency_ms": latency_ms,
+                "tool": tool_name, "user": "system", "project": "podcast",
+                "status": "success",
+            }).encode()
+            req = _req.Request(
+                f"{api_url.rstrip('/')}/api/log",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            _req.urlopen(req, timeout=5)
+        except Exception as e:
+            print(f"[cost-tracker] logging failed: {e}", file=__import__('sys').stderr)
+    threading.Thread(target=_post, daemon=True).start()
+
 for d in [DATA_DIR, EPISODES_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
@@ -327,8 +367,18 @@ def call_anthropic(messages, max_tokens=2500, use_web_search=False, model=None):
         headers=headers
     )
     timeout = 300 if use_web_search else 90
+    import time as _time
+    _start = _time.perf_counter()
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read())
+        result = json.loads(resp.read())
+    _latency_ms = int((_time.perf_counter() - _start) * 1000)
+    # Cost tracking
+    usage = result.get("usage", {})
+    _in_tok = usage.get("input_tokens", 0)
+    _out_tok = usage.get("output_tokens", 0)
+    _cost = _calc_anthropic_cost(body.get("model", "unknown"), _in_tok, _out_tok)
+    _log_api_cost("anthropic", body.get("model", "unknown"), _in_tok, _out_tok, _cost, _latency_ms, "podcast-generation")
+    return result
 
 def extract_text(data):
     return " ".join(b["text"] for b in data.get("content", []) if b.get("type") == "text").strip()
